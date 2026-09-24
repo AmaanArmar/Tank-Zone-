@@ -123,7 +123,7 @@
             transition: width 0.1s linear;
         }
 
-        /* ON-SCREEN TOUCH CONTROLS */
+        /* CONTROLS */
         .controls-container {
             position: absolute;
             bottom: 20px;
@@ -235,7 +235,7 @@
     resizeCanvas();
 
     // -------------------------------------------------------------
-    // 1. GAME MAP, OBSTACLES & SHRINKING SAFE ZONE
+    // 1. GAME MAP, SOLID WALL OBSTACLES & SHRINKING ZONE
     // -------------------------------------------------------------
     const MAP_SIZE = 1800;
     let matchTime = 180;
@@ -248,7 +248,7 @@
         targetRadius: 850
     };
 
-    // Solid Obstacles (Blocks/Rocks)
+    // Solid obstacle blocks for scouting/hiding
     const obstacles = [
         { x: 500, y: 500, w: 120, h: 120 },
         { x: 1200, y: 500, w: 120, h: 120 },
@@ -260,7 +260,7 @@
         { x: 1350, y: 820, w: 80, h: 160 }
     ];
 
-    // Image Loader
+    // Asset Loader
     const images = {};
     function loadImage(key, src) {
         images[key] = new Image();
@@ -274,14 +274,14 @@
     const keys = { up: false, down: false, left: false, right: false };
 
     // -------------------------------------------------------------
-    // 2. ENTITIES (PLAYER & FREE-FOR-ALL AI BOTS)
+    // 2. TANK ENTITIES
     // -------------------------------------------------------------
     const player = {
         id: 'Player (You)',
         x: 900,
         y: 900,
-        angle: 0,
-        speed: 4,
+        angle: -Math.PI / 2, // Default facing up
+        speed: 3.8,
         rotationSpeed: 0.05,
         hp: 100,
         kills: 0,
@@ -291,15 +291,15 @@
     };
 
     const enemies = [
-        { id: 'Alpha Bot', x: 350, y: 350, angle: 0, hp: 100, kills: 0, speed: 2.3, rotationSpeed: 0.045, imgKey: 'enemy1', fallbackColor: '#7a3b2e', lastShootTime: 0 },
-        { id: 'Bravo Bot', x: 1450, y: 350, angle: Math.PI, hp: 100, kills: 0, speed: 2.3, rotationSpeed: 0.045, imgKey: 'enemy2', fallbackColor: '#2e4e7a', lastShootTime: 0 },
-        { id: 'Charlie Bot', x: 900, y: 1550, angle: -Math.PI / 2, hp: 100, kills: 0, speed: 2.3, rotationSpeed: 0.045, imgKey: 'enemy3', fallbackColor: '#5e2b5b', lastShootTime: 0 }
+        { id: 'Alpha Bot', x: 350, y: 350, angle: 0, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.04, imgKey: 'enemy1', fallbackColor: '#7a3b2e', lastShootTime: 0, state: 'scout', stateTimer: 0, targetPos: null },
+        { id: 'Bravo Bot', x: 1450, y: 350, angle: Math.PI, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.04, imgKey: 'enemy2', fallbackColor: '#2e4e7a', lastShootTime: 0, state: 'scout', stateTimer: 0, targetPos: null },
+        { id: 'Charlie Bot', x: 900, y: 1550, angle: -Math.PI / 2, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.04, imgKey: 'enemy3', fallbackColor: '#5e2b5b', lastShootTime: 0, state: 'scout', stateTimer: 0, targetPos: null }
     ];
 
     const bullets = [];
 
     // -------------------------------------------------------------
-    // 3. CONTROLS & BINDINGS
+    // 3. INPUT CONTROLS
     // -------------------------------------------------------------
     function bindBtn(id, keyName) {
         const btn = document.getElementById(id);
@@ -336,6 +336,7 @@
         if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
     });
 
+    // Solid Obstacle Collision
     function checkObstacleCollision(x, y, radius = 22) {
         for (let obs of obstacles) {
             if (x + radius > obs.x && x - radius < obs.x + obs.w &&
@@ -346,13 +347,26 @@
         return false;
     }
 
+    // Line-of-sight Raycast (Check if a wall is between 2 positions)
+    function isLineOfSightClear(x1, y1, x2, y2) {
+        const steps = 30;
+        for (let i = 0; i <= steps; i++) {
+            const px = x1 + (x2 - x1) * (i / steps);
+            const py = y1 + (y2 - y1) * (i / steps);
+            if (checkObstacleCollision(px, py, 4)) {
+                return false; // Blocked by wall
+            }
+        }
+        return true;
+    }
+
     // -------------------------------------------------------------
-    // 4. GAME LOGIC, MATCH TIMER & SMART FREE-FOR-ALL AI
+    // 4. GAME LOGIC, TIMER & ADVANCED AI
     // -------------------------------------------------------------
     function shootBullet(shooter) {
         if (shooter.hp <= 0) return;
         const now = Date.now();
-        if (now - shooter.lastShootTime < 400) return;
+        if (now - shooter.lastShootTime < 450) return;
         shooter.lastShootTime = now;
 
         const bulletSpeed = 10;
@@ -383,27 +397,24 @@
     }, 1000);
 
     function update() {
-        // Smooth zone shrinking
         if (zone.currentRadius > zone.targetRadius) {
             zone.currentRadius -= 0.4;
         }
 
-        // Player Movement & Solid Obstacle Collisions
+        // REALISTIC TANK STEERING FOR PLAYER
         if (player.hp > 0) {
+            // Turning rotates tank body left/right
             if (keys.left) player.angle -= player.rotationSpeed;
             if (keys.right) player.angle += player.rotationSpeed;
 
-            let nextX = player.x;
-            let nextY = player.y;
+            let moveSpeed = 0;
+            // Up moves forward relative to tank angle
+            if (keys.up) moveSpeed = player.speed;
+            // Down moves backward relative to tank angle
+            if (keys.down) moveSpeed = -player.speed * 0.6;
 
-            if (keys.up) {
-                nextX += Math.cos(player.angle) * player.speed;
-                nextY += Math.sin(player.angle) * player.speed;
-            }
-            if (keys.down) {
-                nextX -= Math.cos(player.angle) * (player.speed * 0.5);
-                nextY -= Math.sin(player.angle) * (player.speed * 0.5);
-            }
+            let nextX = player.x + Math.cos(player.angle) * moveSpeed;
+            let nextY = player.y + Math.sin(player.angle) * moveSpeed;
 
             if (!checkObstacleCollision(nextX, player.y)) player.x = nextX;
             if (!checkObstacleCollision(player.x, nextY)) player.y = nextY;
@@ -411,7 +422,6 @@
             player.x = Math.max(30, Math.min(MAP_SIZE - 30, player.x));
             player.y = Math.max(30, Math.min(MAP_SIZE - 30, player.y));
 
-            // Zone Damage
             if (Math.hypot(player.x - zone.x, player.y - zone.y) > zone.currentRadius) {
                 player.hp = Math.max(0, player.hp - 0.1);
             }
@@ -419,14 +429,14 @@
 
         document.getElementById('health-bar').style.width = `${player.hp}%`;
 
-        // Free-For-All AI Targeting Logic
+        // ADVANCED FREE-FOR-ALL AI (Scout, Hide, Line-of-sight Attack)
         const allLivingTanks = [player, ...enemies].filter(t => t.hp > 0);
 
         enemies.forEach(bot => {
             if (bot.hp <= 0) return;
 
-            // Find nearest opponent (Bot or Player)
-            let nearestTarget = null;
+            // Find closest living enemy (Bot or Player)
+            let nearestEnemy = null;
             let minDistance = Infinity;
 
             allLivingTanks.forEach(target => {
@@ -434,30 +444,47 @@
                     const d = Math.hypot(target.x - bot.x, target.y - bot.y);
                     if (d < minDistance) {
                         minDistance = d;
-                        nearestTarget = target;
+                        nearestEnemy = target;
                     }
                 }
             });
 
+            const hasLineOfSight = nearestEnemy ? isLineOfSightClear(bot.x, bot.y, nearestEnemy.x, nearestEnemy.y) : false;
             let targetX = zone.x;
             let targetY = zone.y;
 
+            // Storm Zone Override
             const botDistFromZoneCenter = Math.hypot(bot.x - zone.x, bot.y - zone.y);
-            // Prioritize moving inside zone if caught in storm, otherwise hunt target
-            if (botDistFromZoneCenter > zone.currentRadius - 60) {
+            if (botDistFromZoneCenter > zone.currentRadius - 80) {
                 targetX = zone.x;
                 targetY = zone.y;
-            } else if (nearestTarget) {
-                targetX = nearestTarget.x;
-                targetY = nearestTarget.y;
+            } 
+            // Combat Mode: If visible line-of-sight to target
+            else if (nearestEnemy && hasLineOfSight && minDistance < 600) {
+                targetX = nearestEnemy.x;
+                targetY = nearestEnemy.y;
+            } 
+            // Scouting / Cover Mode: Move around obstacles searching for targets
+            else {
+                bot.stateTimer--;
+                if (bot.stateTimer <= 0 || !bot.targetPos) {
+                    bot.stateTimer = 180 + Math.random() * 120;
+                    bot.targetPos = {
+                        x: zone.x + (Math.random() - 0.5) * (zone.currentRadius * 1.2),
+                        y: zone.y + (Math.random() - 0.5) * (zone.currentRadius * 1.2)
+                    };
+                }
+                targetX = bot.targetPos.x;
+                targetY = bot.targetPos.y;
             }
 
+            // Steer toward Target Angle
             const dx = targetX - bot.x;
             const dy = targetY - bot.y;
             let targetAngle = Math.atan2(dy, dx);
 
-            // Obstacle Avoidance Steering
-            if (checkObstacleCollision(bot.x + Math.cos(bot.angle) * 45, bot.y + Math.sin(bot.angle) * 45)) {
+            // Raycast obstacle detection & avoidance steering
+            if (checkObstacleCollision(bot.x + Math.cos(bot.angle) * 50, bot.y + Math.sin(bot.angle) * 50)) {
                 targetAngle += Math.PI / 2;
             }
 
@@ -465,16 +492,18 @@
             while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
             while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
 
+            // Turn Body
             bot.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), bot.rotationSpeed);
 
+            // Drive Forward
             let nextBotX = bot.x + Math.cos(bot.angle) * bot.speed;
             let nextBotY = bot.y + Math.sin(bot.angle) * bot.speed;
 
             if (!checkObstacleCollision(nextBotX, bot.y)) bot.x = nextBotX;
             if (!checkObstacleCollision(bot.x, nextBotY)) bot.y = nextBotY;
 
-            // Fire on line-of-sight
-            if (nearestTarget && Math.abs(angleDiff) < 0.35 && minDistance < 550) {
+            // Shoot ONLY if aligned and clear line-of-sight exists without hitting walls
+            if (nearestEnemy && hasLineOfSight && Math.abs(angleDiff) < 0.25 && minDistance < 550) {
                 shootBullet(bot);
             }
 
@@ -483,13 +512,13 @@
             }
         });
 
-        // Bullet Updates & Collisions
+        // Bullets & Hit Logic
         for (let i = bullets.length - 1; i >= 0; i--) {
             const b = bullets[i];
             b.x += b.vx;
             b.y += b.vy;
 
-            // Obstacle or Map Boundary Hit
+            // Destroy bullet on hitting solid obstacles or map border
             if (checkObstacleCollision(b.x, b.y, 4) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) {
                 bullets.splice(i, 1);
                 continue;
@@ -531,7 +560,7 @@
     }
 
     // -------------------------------------------------------------
-    // 5. TANK RENDERER (IMAGE WITH VECTOR FALLBACK)
+    // 5. TANK RENDERER (SPRITE & REALISTIC MESH FALLBACK)
     // -------------------------------------------------------------
     function drawTank(x, y, angle, imgKey, fallbackColor) {
         ctx.save();
@@ -543,8 +572,8 @@
             ctx.drawImage(img, -28, -28, 56, 56);
         } else {
             // Detailed vector tank mesh fallback
-            ctx.fillStyle = 'rgba(0,0,0,0.45)';
-            ctx.fillRect(-24, -22, 48, 10);
+            ctx.fillStyle = 'rgba(0,0,0,0.45)
+             ctx.fillRect(-24, -22, 48, 10);
             ctx.fillRect(-24, 12, 48, 10);
 
             ctx.fillStyle = '#1b1e22';
@@ -580,7 +609,7 @@
     }
 
     // -------------------------------------------------------------
-    // 6. CAMERA & RENDER LOOP
+    // 6. RENDER LOOP & CAMERA TRACKING
     // -------------------------------------------------------------
     function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -595,11 +624,11 @@
         for (let x = 0; x <= MAP_SIZE; x += 80) {
             ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
         }
-     for (let y = 0; y <= MAP_SIZE; y += 80) {
+        for (let y = 0; y <= MAP_SIZE; y += 80) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
         }
 
-        // Draw Solid Cover Blocks
+        // Draw Cover Blocks (Obstacles)
         ctx.fillStyle = '#2c3542';
         ctx.strokeStyle = '#151a21';
         ctx.lineWidth = 3;
@@ -613,7 +642,7 @@
         ctx.lineWidth = 5;
         ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-        // Shrinking Safe Zone
+        // Safe Zone Boundary
         ctx.strokeStyle = '#3498db';
         ctx.lineWidth = 3;
         ctx.beginPath();
