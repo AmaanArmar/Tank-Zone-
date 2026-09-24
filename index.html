@@ -123,10 +123,10 @@
             transition: width 0.1s linear;
         }
 
-        /* ELEVATED CONTROLS */
+        /* CONTROLS */
         .controls-container {
             position: absolute;
-            bottom: 45px; /* Lifted higher up from screen bottom */
+            bottom: 45px;
             width: 100%;
             padding: 0 30px;
             display: flex;
@@ -235,9 +235,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // -------------------------------------------------------------
-    // 1. GAME MAP, DENSE COVER WALLS & SHRINKING ZONE
-    // -------------------------------------------------------------
     const MAP_SIZE = 1800;
     let matchTime = 180;
     let zoneStateTimer = 30;
@@ -249,7 +246,6 @@
         targetRadius: 850
     };
 
-    // Dense tactical maze walls and cover blocks spread across the arena
     const obstacles = [
         { x: 450, y: 450, w: 140, h: 140 },
         { x: 1200, y: 450, w: 140, h: 140 },
@@ -259,14 +255,12 @@
         { x: 820, y: 1430, w: 160, h: 70 },
         { x: 300, y: 820, w: 70, h: 160 },
         { x: 1430, y: 820, w: 70, h: 160 },
-        // Extra inner cover walls
         { x: 650, y: 700, w: 90, h: 90 },
         { x: 1050, y: 700, w: 90, h: 90 },
         { x: 650, y: 1000, w: 90, h: 90 },
         { x: 1050, y: 1000, w: 90, h: 90 }
     ];
 
-    // Asset Loader
     const images = {};
     function loadImage(key, src) {
         images[key] = new Image();
@@ -279,14 +273,11 @@
 
     const keys = { up: false, down: false, left: false, right: false };
 
-    // -------------------------------------------------------------
-    // 2. TANK ENTITIES
-    // -------------------------------------------------------------
     const player = {
         id: 'Player (You)',
         x: 900,
         y: 900,
-        angle: -Math.PI / 2,
+        angle: 0,
         speed: 3.8,
         rotationSpeed: 0.055,
         hp: 100,
@@ -304,22 +295,10 @@
 
     const bullets = [];
 
-    // -------------------------------------------------------------
-    // 3. BULLETPROOF CONTROLS BINDING
-    // -------------------------------------------------------------
     function bindBtn(id, keyName) {
         const btn = document.getElementById(id);
-        
-        const press = (e) => {
-            e.preventDefault();
-            keys[keyName] = true;
-            btn.classList.add('active');
-        };
-        const release = (e) => {
-            e.preventDefault();
-            keys[keyName] = false;
-            btn.classList.remove('active');
-        };
+        const press = (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add('active'); };
+        const release = (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove('active'); };
 
         btn.addEventListener('touchstart', press, { passive: false });
         btn.addEventListener('touchend', release, { passive: false });
@@ -369,16 +348,11 @@
         for (let i = 0; i <= steps; i++) {
             const px = x1 + (x2 - x1) * (i / steps);
             const py = y1 + (y2 - y1) * (i / steps);
-            if (checkObstacleCollision(px, py, 4)) {
-                return false;
-            }
+            if (checkObstacleCollision(px, py, 4)) return false;
         }
         return true;
     }
 
-    // -------------------------------------------------------------
-    // 4. GAME LOGIC, TIMER & TACTICAL AI
-    // -------------------------------------------------------------
     function shootBullet(shooter) {
         if (shooter.hp <= 0) return;
         const now = Date.now();
@@ -386,11 +360,13 @@
         shooter.lastShootTime = now;
 
         const bulletSpeed = 10;
+        // Adjusted with Math.PI / 2 offset to line up with the sprite asset facing direction
+        const fireAngle = shooter.angle + Math.PI / 2;
         bullets.push({
-            x: shooter.x + Math.cos(shooter.angle) * 32,
-            y: shooter.y + Math.sin(shooter.angle) * 32,
-            vx: Math.cos(shooter.angle) * bulletSpeed,
-            vy: Math.sin(shooter.angle) * bulletSpeed,
+            x: shooter.x + Math.cos(fireAngle) * 32,
+            y: shooter.y + Math.sin(fireAngle) * 32,
+            vx: Math.cos(fireAngle) * bulletSpeed,
+            vy: Math.sin(fireAngle) * bulletSpeed,
             owner: shooter
         });
     }
@@ -417,17 +393,18 @@
             zone.currentRadius -= 0.4;
         }
 
-        // CORRECTED TANK STEERING FOR PLAYER
         if (player.hp > 0) {
             if (keys.left) player.angle -= player.rotationSpeed;
             if (keys.right) player.angle += player.rotationSpeed;
 
             let moveSpeed = 0;
-            if (keys.up) moveSpeed = player.speed;         // Forward
-            if (keys.down) moveSpeed = -player.speed * 0.6; // Backward
+            if (keys.up) moveSpeed = player.speed;
+            if (keys.down) moveSpeed = -player.speed * 0.6;
 
-            let nextX = player.x + Math.cos(player.angle) * moveSpeed;
-            let nextY = player.y + Math.sin(player.angle) * moveSpeed;
+            // Movement vector adjusted to offset source orientation
+            const moveAngle = player.angle + Math.PI / 2;
+            let nextX = player.x + Math.cos(moveAngle) * moveSpeed;
+            let nextY = player.y + Math.sin(moveAngle) * moveSpeed;
 
             if (!checkObstacleCollision(nextX, player.y)) player.x = nextX;
             if (!checkObstacleCollision(player.x, nextY)) player.y = nextY;
@@ -442,7 +419,6 @@
 
         document.getElementById('health-bar').style.width = `${player.hp}%`;
 
-        // TACTICAL AI (Scouting, Hiding behind cover, Line-of-sight engagement)
         const allLivingTanks = [player, ...enemies].filter(t => t.hp > 0);
 
         enemies.forEach(bot => {
@@ -487,9 +463,9 @@
 
             const dx = targetX - bot.x;
             const dy = targetY - bot.y;
-            let targetAngle = Math.atan2(dy, dx);
+            let targetAngle = Math.atan2(dy, dx) - Math.PI / 2;
 
-            if (checkObstacleCollision(bot.x + Math.cos(bot.angle) * 50, bot.y + Math.sin(bot.angle) * 50)) {
+            if (checkObstacleCollision(bot.x + Math.cos(bot.angle + Math.PI / 2) * 50, bot.y + Math.sin(bot.angle + Math.PI / 2) * 50)) {
                 targetAngle += Math.PI / 2;
             }
 
@@ -499,8 +475,9 @@
 
             bot.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), bot.rotationSpeed);
 
-            let nextBotX = bot.x + Math.cos(bot.angle) * bot.speed;
-            let nextBotY = bot.y + Math.sin(bot.angle) * bot.speed;
+            const botMoveAngle = bot.angle + Math.PI / 2;
+            let nextBotX = bot.x + Math.cos(botMoveAngle) * bot.speed;
+            let nextBotY = bot.y + Math.sin(botMoveAngle) * bot.speed;
 
             if (!checkObstacleCollision(nextBotX, bot.y)) bot.x = nextBotX;
             if (!checkObstacleCollision(bot.x, nextBotY)) bot.y = nextBotY;
@@ -514,7 +491,6 @@
             }
         });
 
-        // Bullets & Collisions
         for (let i = bullets.length - 1; i >= 0; i--) {
             const b = bullets[i];
             b.x += b.vx;
@@ -558,13 +534,11 @@
         });
     }
 
-    // -------------------------------------------------------------
-    // 5. TANK RENDERER
-    // -------------------------------------------------------------
     function drawTank(x, y, angle, imgKey, fallbackColor) {
         ctx.save();
         ctx.translate(x, y);
-        ctx.rotate(angle);
+        // Corrects source sprite asset rotation offset (adds 90 degrees / Math.PI / 2)
+        ctx.rotate(angle + Math.PI / 2);
 
         const img = images[imgKey];
         if (img && img.complete && img.naturalWidth !== 0) {
@@ -574,31 +548,15 @@
             ctx.fillRect(-24, -22, 48, 10);
             ctx.fillRect(-24, 12, 48, 10);
 
-            ctx.fillStyle = '#1b1e22';
-            ctx.fillRect(-22, -20, 44, 8);
-            ctx.fillRect(-22, 12, 44, 8);
-
             ctx.fillStyle = fallbackColor;
             ctx.beginPath();
             ctx.moveTo(-18, -12);
             ctx.lineTo(16, -12);
-             ctx.lineTo(22, -6);
+            ctx.lineTo(22, -6);
             ctx.lineTo(22, 6);
             ctx.lineTo(16, 12);
             ctx.lineTo(-18, 12);
             ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#0a0d10';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            ctx.fillStyle = '#121417';
-            ctx.fillRect(0, -3.5, 32, 7);
-            ctx.strokeRect(0, -3.5, 32, 7);
-
-            ctx.fillStyle = fallbackColor;
-            ctx.beginPath();
-            ctx.arc(-2, 0, 10, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
         }
@@ -606,16 +564,12 @@
         ctx.restore();
     }
 
-    // -------------------------------------------------------------
-    // 6. RENDER LOOP & CAMERA TRACKING
-    // -------------------------------------------------------------
     function render() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         ctx.save();
         ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-        // Arena Grid
         ctx.strokeStyle = '#212730';
         ctx.lineWidth = 1;
         for (let x = 0; x <= MAP_SIZE; x += 80) {
@@ -625,7 +579,6 @@
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
         }
 
-        // Render Cover Obstacles
         ctx.fillStyle = '#2c3542';
         ctx.strokeStyle = '#151a21';
         ctx.lineWidth = 3;
@@ -634,31 +587,26 @@
             ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
         });
 
-        // Outer Bounds
         ctx.strokeStyle = '#e74c3c';
         ctx.lineWidth = 5;
         ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
 
-        // Safe Zone Boundary
         ctx.strokeStyle = '#3498db';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(zone.x, zone.y, zone.currentRadius, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Render Player
         if (player.hp > 0) {
             drawTank(player.x, player.y, player.angle, player.imgKey, player.fallbackColor);
         }
 
-        // Render AI Bots
         enemies.forEach(bot => {
             if (bot.hp > 0) {
                 drawTank(bot.x, bot.y, bot.angle, bot.imgKey, bot.fallbackColor);
             }
         });
 
-        // Render Bullets
         bullets.forEach(b => {
             ctx.fillStyle = '#f1c40f';
             ctx.beginPath();
