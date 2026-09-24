@@ -123,12 +123,12 @@
             transition: width 0.1s linear;
         }
 
-        /* CONTROLS */
+        /* ELEVATED CONTROLS */
         .controls-container {
             position: absolute;
-            bottom: 20px;
+            bottom: 45px; /* Lifted higher up from screen bottom */
             width: 100%;
-            padding: 0 25px;
+            padding: 0 30px;
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
@@ -142,25 +142,25 @@
 
         .dpad {
             display: grid;
-            grid-template-columns: repeat(3, 60px);
-            grid-template-rows: repeat(2, 60px);
-            gap: 6px;
+            grid-template-columns: repeat(3, 65px);
+            grid-template-rows: repeat(2, 65px);
+            gap: 8px;
         }
 
         .btn {
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.22);
+            border: 2px solid rgba(255, 255, 255, 0.45);
             color: white;
             font-weight: bold;
-            font-size: 20px;
-            border-radius: 12px;
+            font-size: 22px;
+            border-radius: 14px;
             display: flex;
             justify-content: center;
             align-items: center;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(6px);
         }
-        .btn:active {
-            background: rgba(255, 255, 255, 0.5);
+        .btn:active, .btn.active {
+            background: rgba(255, 255, 255, 0.55);
         }
 
         #btn-up { grid-column: 2; grid-row: 1; }
@@ -169,18 +169,19 @@
         #btn-right { grid-column: 3; grid-row: 2; }
 
         .fire-btn {
-            width: 85px;
-            height: 85px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
-            background: rgba(231, 76, 60, 0.85);
+            background: rgba(231, 76, 60, 0.9);
             border: 3px solid #e74c3c;
-            font-size: 18px;
+            font-size: 19px;
             color: white;
             font-weight: 900;
-            backdrop-filter: blur(4px);
+            backdrop-filter: blur(6px);
             display: flex;
             justify-content: center;
             align-items: center;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
         }
         .fire-btn:active {
             background: rgba(255, 0, 0, 1);
@@ -235,7 +236,7 @@
     resizeCanvas();
 
     // -------------------------------------------------------------
-    // 1. GAME MAP, SOLID WALL OBSTACLES & SHRINKING ZONE
+    // 1. GAME MAP, DENSE COVER WALLS & SHRINKING ZONE
     // -------------------------------------------------------------
     const MAP_SIZE = 1800;
     let matchTime = 180;
@@ -248,16 +249,21 @@
         targetRadius: 850
     };
 
-    // Solid obstacle blocks for scouting/hiding
+    // Dense tactical maze walls and cover blocks spread across the arena
     const obstacles = [
-        { x: 500, y: 500, w: 120, h: 120 },
-        { x: 1200, y: 500, w: 120, h: 120 },
-        { x: 500, y: 1200, w: 120, h: 120 },
-        { x: 1200, y: 1200, w: 120, h: 120 },
-        { x: 820, y: 350, w: 160, h: 80 },
-        { x: 820, y: 1350, w: 160, h: 80 },
-        { x: 350, y: 820, w: 80, h: 160 },
-        { x: 1350, y: 820, w: 80, h: 160 }
+        { x: 450, y: 450, w: 140, h: 140 },
+        { x: 1200, y: 450, w: 140, h: 140 },
+        { x: 450, y: 1200, w: 140, h: 140 },
+        { x: 1200, y: 1200, w: 140, h: 140 },
+        { x: 820, y: 300, w: 160, h: 70 },
+        { x: 820, y: 1430, w: 160, h: 70 },
+        { x: 300, y: 820, w: 70, h: 160 },
+        { x: 1430, y: 820, w: 70, h: 160 },
+        // Extra inner cover walls
+        { x: 650, y: 700, w: 90, h: 90 },
+        { x: 1050, y: 700, w: 90, h: 90 },
+        { x: 650, y: 1000, w: 90, h: 90 },
+        { x: 1050, y: 1000, w: 90, h: 90 }
     ];
 
     // Asset Loader
@@ -280,9 +286,9 @@
         id: 'Player (You)',
         x: 900,
         y: 900,
-        angle: -Math.PI / 2, // Default facing up
+        angle: -Math.PI / 2,
         speed: 3.8,
-        rotationSpeed: 0.05,
+        rotationSpeed: 0.055,
         hp: 100,
         kills: 0,
         imgKey: 'player',
@@ -291,24 +297,36 @@
     };
 
     const enemies = [
-        { id: 'Alpha Bot', x: 350, y: 350, angle: 0, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.04, imgKey: 'enemy1', fallbackColor: '#7a3b2e', lastShootTime: 0, state: 'scout', stateTimer: 0, targetPos: null },
-        { id: 'Bravo Bot', x: 1450, y: 350, angle: Math.PI, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.04, imgKey: 'enemy2', fallbackColor: '#2e4e7a', lastShootTime: 0, state: 'scout', stateTimer: 0, targetPos: null },
-        { id: 'Charlie Bot', x: 900, y: 1550, angle: -Math.PI / 2, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.04, imgKey: 'enemy3', fallbackColor: '#5e2b5b', lastShootTime: 0, state: 'scout', stateTimer: 0, targetPos: null }
+        { id: 'Alpha Bot', x: 300, y: 300, angle: 0, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.045, imgKey: 'enemy1', fallbackColor: '#7a3b2e', lastShootTime: 0, stateTimer: 0, targetPos: null },
+        { id: 'Bravo Bot', x: 1500, y: 300, angle: Math.PI, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.045, imgKey: 'enemy2', fallbackColor: '#2e4e7a', lastShootTime: 0, stateTimer: 0, targetPos: null },
+        { id: 'Charlie Bot', x: 900, y: 1500, angle: -Math.PI / 2, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.045, imgKey: 'enemy3', fallbackColor: '#5e2b5b', lastShootTime: 0, stateTimer: 0, targetPos: null }
     ];
 
     const bullets = [];
 
     // -------------------------------------------------------------
-    // 3. INPUT CONTROLS
+    // 3. BULLETPROOF CONTROLS BINDING
     // -------------------------------------------------------------
     function bindBtn(id, keyName) {
         const btn = document.getElementById(id);
-        const start = (e) => { e.preventDefault(); keys[keyName] = true; };
-        const end = (e) => { e.preventDefault(); keys[keyName] = false; };
-        btn.addEventListener('touchstart', start, { passive: false });
-        btn.addEventListener('touchend', end, { passive: false });
-        btn.addEventListener('mousedown', start);
-        btn.addEventListener('mouseup', end);
+        
+        const press = (e) => {
+            e.preventDefault();
+            keys[keyName] = true;
+            btn.classList.add('active');
+        };
+        const release = (e) => {
+            e.preventDefault();
+            keys[keyName] = false;
+            btn.classList.remove('active');
+        };
+
+        btn.addEventListener('touchstart', press, { passive: false });
+        btn.addEventListener('touchend', release, { passive: false });
+        btn.addEventListener('touchcancel', release, { passive: false });
+        btn.addEventListener('mousedown', press);
+        btn.addEventListener('mouseup', release);
+        btn.addEventListener('mouseleave', release);
     }
 
     bindBtn('btn-up', 'up');
@@ -336,7 +354,6 @@
         if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
     });
 
-    // Solid Obstacle Collision
     function checkObstacleCollision(x, y, radius = 22) {
         for (let obs of obstacles) {
             if (x + radius > obs.x && x - radius < obs.x + obs.w &&
@@ -347,21 +364,20 @@
         return false;
     }
 
-    // Line-of-sight Raycast (Check if a wall is between 2 positions)
     function isLineOfSightClear(x1, y1, x2, y2) {
         const steps = 30;
         for (let i = 0; i <= steps; i++) {
             const px = x1 + (x2 - x1) * (i / steps);
             const py = y1 + (y2 - y1) * (i / steps);
             if (checkObstacleCollision(px, py, 4)) {
-                return false; // Blocked by wall
+                return false;
             }
         }
         return true;
     }
 
     // -------------------------------------------------------------
-    // 4. GAME LOGIC, TIMER & ADVANCED AI
+    // 4. GAME LOGIC, TIMER & TACTICAL AI
     // -------------------------------------------------------------
     function shootBullet(shooter) {
         if (shooter.hp <= 0) return;
@@ -401,17 +417,14 @@
             zone.currentRadius -= 0.4;
         }
 
-        // REALISTIC TANK STEERING FOR PLAYER
+        // CORRECTED TANK STEERING FOR PLAYER
         if (player.hp > 0) {
-            // Turning rotates tank body left/right
             if (keys.left) player.angle -= player.rotationSpeed;
             if (keys.right) player.angle += player.rotationSpeed;
 
             let moveSpeed = 0;
-            // Up moves forward relative to tank angle
-            if (keys.up) moveSpeed = player.speed;
-            // Down moves backward relative to tank angle
-            if (keys.down) moveSpeed = -player.speed * 0.6;
+            if (keys.up) moveSpeed = player.speed;         // Forward
+            if (keys.down) moveSpeed = -player.speed * 0.6; // Backward
 
             let nextX = player.x + Math.cos(player.angle) * moveSpeed;
             let nextY = player.y + Math.sin(player.angle) * moveSpeed;
@@ -429,13 +442,12 @@
 
         document.getElementById('health-bar').style.width = `${player.hp}%`;
 
-        // ADVANCED FREE-FOR-ALL AI (Scout, Hide, Line-of-sight Attack)
+        // TACTICAL AI (Scouting, Hiding behind cover, Line-of-sight engagement)
         const allLivingTanks = [player, ...enemies].filter(t => t.hp > 0);
 
         enemies.forEach(bot => {
             if (bot.hp <= 0) return;
 
-            // Find closest living enemy (Bot or Player)
             let nearestEnemy = null;
             let minDistance = Infinity;
 
@@ -453,37 +465,30 @@
             let targetX = zone.x;
             let targetY = zone.y;
 
-            // Storm Zone Override
             const botDistFromZoneCenter = Math.hypot(bot.x - zone.x, bot.y - zone.y);
             if (botDistFromZoneCenter > zone.currentRadius - 80) {
                 targetX = zone.x;
                 targetY = zone.y;
-            } 
-            // Combat Mode: If visible line-of-sight to target
-            else if (nearestEnemy && hasLineOfSight && minDistance < 600) {
+            } else if (nearestEnemy && hasLineOfSight && minDistance < 600) {
                 targetX = nearestEnemy.x;
                 targetY = nearestEnemy.y;
-            } 
-            // Scouting / Cover Mode: Move around obstacles searching for targets
-            else {
+            } else {
                 bot.stateTimer--;
                 if (bot.stateTimer <= 0 || !bot.targetPos) {
-                    bot.stateTimer = 180 + Math.random() * 120;
+                    bot.stateTimer = 160 + Math.random() * 100;
                     bot.targetPos = {
-                        x: zone.x + (Math.random() - 0.5) * (zone.currentRadius * 1.2),
-                        y: zone.y + (Math.random() - 0.5) * (zone.currentRadius * 1.2)
+                        x: zone.x + (Math.random() - 0.5) * (zone.currentRadius * 1.1),
+                        y: zone.y + (Math.random() - 0.5) * (zone.currentRadius * 1.1)
                     };
                 }
                 targetX = bot.targetPos.x;
                 targetY = bot.targetPos.y;
             }
 
-            // Steer toward Target Angle
             const dx = targetX - bot.x;
             const dy = targetY - bot.y;
             let targetAngle = Math.atan2(dy, dx);
 
-            // Raycast obstacle detection & avoidance steering
             if (checkObstacleCollision(bot.x + Math.cos(bot.angle) * 50, bot.y + Math.sin(bot.angle) * 50)) {
                 targetAngle += Math.PI / 2;
             }
@@ -492,18 +497,15 @@
             while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
             while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
 
-            // Turn Body
             bot.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), bot.rotationSpeed);
 
-            // Drive Forward
             let nextBotX = bot.x + Math.cos(bot.angle) * bot.speed;
             let nextBotY = bot.y + Math.sin(bot.angle) * bot.speed;
 
             if (!checkObstacleCollision(nextBotX, bot.y)) bot.x = nextBotX;
             if (!checkObstacleCollision(bot.x, nextBotY)) bot.y = nextBotY;
 
-            // Shoot ONLY if aligned and clear line-of-sight exists without hitting walls
-            if (nearestEnemy && hasLineOfSight && Math.abs(angleDiff) < 0.25 && minDistance < 550) {
+            if (nearestEnemy && hasLineOfSight && Math.abs(angleDiff) < 0.3 && minDistance < 550) {
                 shootBullet(bot);
             }
 
@@ -512,19 +514,17 @@
             }
         });
 
-        // Bullets & Hit Logic
+        // Bullets & Collisions
         for (let i = bullets.length - 1; i >= 0; i--) {
             const b = bullets[i];
             b.x += b.vx;
             b.y += b.vy;
 
-            // Destroy bullet on hitting solid obstacles or map border
             if (checkObstacleCollision(b.x, b.y, 4) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) {
                 bullets.splice(i, 1);
                 continue;
             }
 
-            // Hit Player
             if (b.owner !== player && player.hp > 0 && Math.hypot(b.x - player.x, b.y - player.y) < 22) {
                 player.hp = Math.max(0, player.hp - 15);
                 if (player.hp === 0) b.owner.kills++;
@@ -532,7 +532,6 @@
                 continue;
             }
 
-            // Hit AI Bots
             enemies.forEach(bot => {
                 if (b.owner !== bot && bot.hp > 0 && Math.hypot(b.x - bot.x, b.y - bot.y) < 22) {
                     bot.hp = Math.max(0, bot.hp - 35);
@@ -560,7 +559,7 @@
     }
 
     // -------------------------------------------------------------
-    // 5. TANK RENDERER (SPRITE & REALISTIC MESH FALLBACK)
+    // 5. TANK RENDERER
     // -------------------------------------------------------------
     function drawTank(x, y, angle, imgKey, fallbackColor) {
         ctx.save();
@@ -571,9 +570,8 @@
         if (img && img.complete && img.naturalWidth !== 0) {
             ctx.drawImage(img, -28, -28, 56, 56);
         } else {
-            // Detailed vector tank mesh fallback
-            ctx.fillStyle = 'rgba(0,0,0,0.45)
-             ctx.fillRect(-24, -22, 48, 10);
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(-24, -22, 48, 10);
             ctx.fillRect(-24, 12, 48, 10);
 
             ctx.fillStyle = '#1b1e22';
@@ -584,7 +582,7 @@
             ctx.beginPath();
             ctx.moveTo(-18, -12);
             ctx.lineTo(16, -12);
-            ctx.lineTo(22, -6);
+             ctx.lineTo(22, -6);
             ctx.lineTo(22, 6);
             ctx.lineTo(16, 12);
             ctx.lineTo(-18, 12);
@@ -615,10 +613,9 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         ctx.save();
-        // Camera Follows Player Center
         ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
 
-        // Arena Grid Lines
+        // Arena Grid
         ctx.strokeStyle = '#212730';
         ctx.lineWidth = 1;
         for (let x = 0; x <= MAP_SIZE; x += 80) {
@@ -628,7 +625,7 @@
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
         }
 
-        // Draw Cover Blocks (Obstacles)
+        // Render Cover Obstacles
         ctx.fillStyle = '#2c3542';
         ctx.strokeStyle = '#151a21';
         ctx.lineWidth = 3;
