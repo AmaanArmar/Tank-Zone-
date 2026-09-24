@@ -1,408 +1,611 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Tank Arena - PvE & Split-Screen PvP</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body, html { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: sans-serif; user-select: none; }
-  
-  #game-container { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
-  canvas { display: block; background: #1a1a1a; width: 100%; height: 100%; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2.5D Realistic Tank Battle Royale</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body {
+            background-color: #0d1015;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #1a202c;
+        }
+        
+        /* HUD OVERLAYS */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+        
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
 
-  #menu-overlay {
-    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.92);
-    display: flex; flex-direction: column; justify-content: center;
-    align-items: center; color: white; z-index: 100; text-align: center; padding: 20px;
-  }
-  h1 { color: #ffd700; margin-bottom: 10px; font-style: italic; text-transform: uppercase; font-size: 2.5rem; }
-  p { color: #aaa; margin-bottom: 25px; font-size: 1.1rem; }
-  .menu-btn {
-    padding: 16px 32px; font-size: 1.2rem; font-weight: bold;
-    background: #e10600; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 10px;
-    width: 300px; text-transform: uppercase; transition: 0.2s; box-shadow: 0 4px 15px rgba(225,6,0,0.4);
-  }
-  .menu-btn:hover { background: #ff2218; transform: scale(1.05); }
+        .stats-panel {
+            background: rgba(10, 14, 20, 0.85);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
 
-  #hud-overlay {
-    position: absolute; top: 15px; left: 15px; right: 15px;
-    display: flex; justify-content: space-between; pointer-events: none; z-index: 10;
-    font-weight: bold; font-size: 15px; color: white; text-shadow: 1px 1px 3px #000;
-  }
-  .hud-box { background: rgba(0,0,0,0.75); padding: 8px 16px; border-radius: 6px; border: 1px solid #555; }
+        #timer-display {
+            font-size: 22px;
+            font-weight: 800;
+            color: #f39c12;
+            text-align: center;
+        }
 
-  /* On-Screen Mobile Controls */
-  .touch-controls {
-    position: absolute; bottom: 20px; left: 20px; right: 20px;
-    display: flex; justify-content: space-between; align-items: flex-end;
-    pointer-events: none; z-index: 10; touch-action: none; display: none;
-  }
-  .dpad { display: grid; grid-template-columns: repeat(3, 55px); grid-template-rows: repeat(3, 55px); gap: 6px; pointer-events: auto; }
-  .ctrl-btn {
-    background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.7);
-    border-radius: 10px; color: white; display: flex; justify-content: center; align-items: center; font-size: 22px; cursor: pointer;
-  }
-  .ctrl-btn:active { background: rgba(76, 175, 80, 0.8); }
-  .btn-up { grid-column: 2; grid-row: 1; }
-  .btn-left { grid-column: 1; grid-row: 2; }
-  .btn-right { grid-column: 3; grid-row: 2; }
-  .btn-down { grid-column: 2; grid-row: 3; }
-  .fire-btn {
-    width: 80px; height: 80px; border-radius: 50%; background: rgba(225, 6, 0, 0.9);
-    color: white; font-weight: bold; display: flex; justify-content: center;
-    align-items: center; pointer-events: auto; border: 3px solid white; cursor: pointer; font-size: 16px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-  }
-</style>
+        #zone-timer {
+            font-size: 12px;
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        /* LEADERBOARD */
+        .leaderboard {
+            min-width: 190px;
+        }
+        .leaderboard h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #88a0c0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+        }
+        .leaderboard-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .leaderboard-row.player-row {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        /* HEALTH BAR */
+        .health-box {
+            width: 200px;
+        }
+        .bar-bg {
+            width: 100%;
+            height: 12px;
+            background: #222;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #444;
+            margin-top: 4px;
+        }
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e74c3c, #2ecc71);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* CONTROLS */
+        .controls-container {
+            position: absolute;
+            bottom: 45px;
+            width: 100%;
+            padding: 0 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .dpad, .fire-btn {
+            pointer-events: auto;
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 65px);
+            grid-template-rows: repeat(2, 65px);
+            gap: 8px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.22);
+            border: 2px solid rgba(255, 255, 255, 0.45);
+            color: white;
+            font-weight: bold;
+            font-size: 22px;
+            border-radius: 14px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(6px);
+        }
+        .btn:active, .btn.active {
+            background: rgba(255, 255, 255, 0.55);
+        }
+
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+
+        .fire-btn {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: rgba(231, 76, 60, 0.9);
+            border: 3px solid #e74c3c;
+            font-size: 19px;
+            color: white;
+            font-weight: 900;
+            backdrop-filter: blur(6px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+        }
+        .fire-btn:active {
+            background: rgba(255, 0, 0, 1);
+            transform: scale(0.95);
+        }
+    </style>
 </head>
 <body>
 
 <div id="game-container">
-  <div id="hud-overlay">
-    <div id="p1-hud" class="hud-box">P1 HP: 100</div>
-    <div id="game-mode-hud" class="hud-box">MODE: PVE</div>
-    <div id="p2-hud" class="hud-box" style="display:none;">P2 HP: 100</div>
-  </div>
+    <canvas id="gameCanvas"></canvas>
 
-  <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+        <div class="top-bar">
+            <div class="stats-panel health-box">
+                <div style="font-size:12px; font-weight:bold;">PLAYER HEALTH</div>
+                <div class="bar-bg"><div id="health-bar" class="bar-fill"></div></div>
+            </div>
 
-  <div id="touch-controls" class="touch-controls">
-    <div class="dpad">
-      <div class="ctrl-btn btn-up" id="t-up">▲</div>
-      <div class="ctrl-btn btn-left" id="t-left">◄</div>
-      <div class="ctrl-btn btn-right" id="t-right">►</div>
-      <div class="ctrl-btn btn-down" id="t-down">▼</div>
+            <div class="stats-panel">
+                <div id="timer-display">03:00</div>
+                <div id="zone-timer">Zone Shrinking in 30s</div>
+            </div>
+
+            <div class="stats-panel leaderboard">
+                <h3>Match Leaderboard</h3>
+                <div id="leaderboard-list"></div>
+            </div>
+        </div>
+
+        <div class="controls-container">
+            <div class="dpad">
+                <div class="btn" id="btn-up">▲</div>
+                <div class="btn" id="btn-left">◀</div>
+                <div class="btn" id="btn-down">▼</div>
+                <div class="btn" id="btn-right">▶</div>
+            </div>
+            <div class="btn fire-btn" id="btn-fire">FIRE</div>
+        </div>
     </div>
-    <div class="fire-btn" id="t-fire">FIRE</div>
-  </div>
-
-  <div id="menu-overlay">
-    <h1>Tank Arena Battle</h1>
-    <p>Select Your Game Mode</p>
-    <button class="menu-btn" onclick="startGame('pve')">Player vs AI (PvE)</button>
-    <button class="menu-btn" onclick="startGame('pvp')">2-Player Split-Screen (PvP)</button>
-  </div>
 </div>
 
 <script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-const MAP_WIDTH = 2500;
-const MAP_HEIGHT = 2500;
-
-// Image loader with GitHub relative path safety fallback checks
-const tankImg = new Image();
-let imageLoaded = false;
-tankImg.onload = () => { imageLoaded = true; };
-tankImg.onerror = () => { imageLoaded = false; console.warn("Tank image asset missing or blocked. Switching to vector tank rendering."); };
-tankImg.src = '2839.png';
-
-let gameMode = 'pve'; 
-let gameActive = false;
-let tanks = [], bullets = [], obstacles = [];
-let keys = {};
-
-const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-if (isMobile) {
-  document.getElementById('touch-controls').style.display = 'flex';
-}
-
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-
-function bindTouch(id, keyName) {
-  const el = document.getElementById(id);
-  if(!el) return;
-  const press = (e) => { e.preventDefault(); keys[keyName] = true; };
-  const release = (e) => { e.preventDefault(); keys[keyName] = false; };
-  el.addEventListener('touchstart', press); el.addEventListener('touchend', release);
-  el.addEventListener('mousedown', press); el.addEventListener('mouseup', release);
-}
-bindTouch('t-up', 'w');
-bindTouch('t-left', 'a');
-bindTouch('t-right', 'd');
-bindTouch('t-down', 's');
-document.getElementById('t-fire').addEventListener('click', () => { if(tanks[0]) tanks[0].shoot(); });
-
-class Tank {
-  constructor(x, y, colorTint, isPlayer, name, controls) {
-    this.x = x;
-    this.y = y;
-    this.width = 40;
-    this.height = 60;
-    this.radius = 25;
-    this.angle = Math.random() * Math.PI * 2;
-    this.speed = 3.5;
-    this.turnSpeed = 0.05;
-    this.colorTint = colorTint;
-    this.isPlayer = isPlayer;
-    this.name = name;
-    this.controls = controls; 
-    this.hp = 100;
-    this.reload = 0;
-    this.id = Math.random();
-  }
-
-  update() {
-    if (this.reload > 0) this.reload--;
-
-    if (this.controls === 'p1') {
-      if (keys['a']) this.angle -= this.turnSpeed;
-      if (keys['d']) this.angle += this.turnSpeed;
-      let move = 0;
-      if (keys['w']) move = 1;
-      if (keys['s']) move = -0.5;
-      if (move !== 0) this.move(move);
-      if (keys[' ']) this.shoot();
-    } 
-    else if (this.controls === 'p2') {
-      if (keys['arrowleft']) this.angle -= this.turnSpeed;
-      if (keys['arrowright']) this.angle += this.turnSpeed;
-      let move = 0;
-      if (keys['arrowup']) move = 1;
-      if (keys['arrowdown']) move = -0.5;
-      if (move !== 0) this.move(move);
-      if (keys['enter']) this.shoot();
-    } 
-    else if (this.controls === 'ai') {
-      let target = tanks.find(t => t.id !== this.id);
-      if (target) {
-        let targetAngle = Math.atan2(target.y - this.y, target.x - this.x);
-        let diff = targetAngle - this.angle;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        this.angle += Math.sign(diff) * Math.min(Math.abs(diff), this.turnSpeed * 0.8);
-        
-        this.move(0.7);
-        if (Math.abs(diff) < 0.4) this.shoot();
-      }
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
     }
-  }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-  move(dir) {
-    let nextX = this.x + Math.cos(this.angle) * this.speed * dir;
-    let nextY = this.y + Math.sin(this.angle) * this.speed * dir;
-    if (!checkCollision(nextX, nextY, this.radius)) {
-      this.x = nextX;
-      this.y = nextY;
+    const MAP_SIZE = 1800;
+    let matchTime = 180;
+    let zoneStateTimer = 30;
+
+    const zone = {
+        x: MAP_SIZE / 2,
+        y: MAP_SIZE / 2,
+        currentRadius: 850,
+        targetRadius: 850
+    };
+
+    const obstacles = [
+        { x: 450, y: 450, w: 140, h: 140 },
+        { x: 1200, y: 450, w: 140, h: 140 },
+        { x: 450, y: 1200, w: 140, h: 140 },
+        { x: 1200, y: 1200, w: 140, h: 140 },
+        { x: 820, y: 300, w: 160, h: 70 },
+        { x: 820, y: 1430, w: 160, h: 70 },
+        { x: 300, y: 820, w: 70, h: 160 },
+        { x: 1430, y: 820, w: 70, h: 160 },
+        { x: 650, y: 700, w: 90, h: 90 },
+        { x: 1050, y: 700, w: 90, h: 90 },
+        { x: 650, y: 1000, w: 90, h: 90 },
+        { x: 1050, y: 1000, w: 90, h: 90 }
+    ];
+
+    const images = {};
+    function loadImage(key, src) {
+        images[key] = new Image();
+        images[key].src = src;
     }
-  }
+    loadImage('player', '2830.png');
+    loadImage('enemy1', '2835.png');
+    loadImage('enemy2', '2839.png');
+    loadImage('enemy3', '2834.png');
 
-  shoot() {
-    if (this.reload <= 0) {
-      bullets.push(new Bullet(
-        this.x + Math.cos(this.angle) * 35,
-        this.y + Math.sin(this.angle) * 35,
-        this.angle,
-        this.id
-      ));
-      this.reload = 35;
+    const keys = { up: false, down: false, left: false, right: false };
+
+    const player = {
+        id: 'Player (You)',
+        x: 900,
+        y: 900,
+        angle: 0,
+        speed: 3.8,
+        rotationSpeed: 0.055,
+        hp: 100,
+        kills: 0,
+        imgKey: 'player',
+        lastShootTime: 0
+    };
+
+    const enemies = [
+        { id: 'Alpha Bot', x: 300, y: 300, angle: 0, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.045, imgKey: 'enemy1', lastShootTime: 0, stateTimer: 0, targetPos: null },
+        { id: 'Bravo Bot', x: 1500, y: 300, angle: Math.PI, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.045, imgKey: 'enemy2', lastShootTime: 0, stateTimer: 0, targetPos: null },
+        { id: 'Charlie Bot', x: 900, y: 1500, angle: -Math.PI / 2, hp: 100, kills: 0, speed: 2.2, rotationSpeed: 0.045, imgKey: 'enemy3', lastShootTime: 0, stateTimer: 0, targetPos: null }
+    ];
+
+    const bullets = [];
+
+    function bindBtn(id, keyName) {
+        const btn = document.getElementById(id);
+        const press = (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add('active'); };
+        const release = (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove('active'); };
+
+        btn.addEventListener('touchstart', press, { passive: false });
+        btn.addEventListener('touchend', release, { passive: false });
+        btn.addEventListener('touchcancel', release, { passive: false });
+        btn.addEventListener('mousedown', press);
+        btn.addEventListener('mouseup', release);
+        btn.addEventListener('mouseleave', release);
     }
-  }
 
-  draw(targetCtx) {
-    targetCtx.save();
-    targetCtx.translate(this.x, this.y);
-    targetCtx.rotate(this.angle + Math.PI / 2);
+    bindBtn('btn-up', 'up');
+    bindBtn('btn-down', 'down');
+    bindBtn('btn-left', 'left');
+    bindBtn('btn-right', 'right');
 
-    if (imageLoaded) {
-      targetCtx.drawImage(tankImg, -this.width / 2, -this.height / 2, this.width, this.height);
-    } else {
-      // Guaranteed vector fallback graphic if image lookup fails on GitHub
-      targetCtx.fillStyle = this.colorTint || '#fff';
-      targetCtx.fillRect(-18, -25, 36, 50); 
-      targetCtx.fillStyle = '#111';
-      targetCtx.fillRect(-22, -20, 6, 40); 
-      targetCtx.fillRect(16, -20, 6, 40);  
-      targetCtx.fillStyle = '#444';
-      targetCtx.fillRect(-4, -38, 8, 30);  
-      targetCtx.beginPath();
-      targetCtx.arc(0, 0, 12, 0, Math.PI * 2);
-      targetCtx.fill();                    
-    }
-    targetCtx.restore();
+    const fireBtn = document.getElementById('btn-fire');
+    const triggerFire = (e) => { e.preventDefault(); shootBullet(player); };
+    fireBtn.addEventListener('touchstart', triggerFire, { passive: false });
+    fireBtn.addEventListener('mousedown', triggerFire);
 
-    // Health bar & label
-    targetCtx.fillStyle = 'rgba(0,0,0,0.7)';
-    targetCtx.fillRect(this.x - 22, this.y - 48, 44, 7);
-    targetCtx.fillStyle = '#4caf50';
-    targetCtx.fillRect(this.x - 22, this.y - 48, (this.hp / 100) * 44, 7);
-
-    targetCtx.fillStyle = '#fff';
-    targetCtx.font = '12px sans-serif';
-    targetCtx.textAlign = 'center';
-    targetCtx.fillText(this.name, this.x, this.y - 56);
-  }
-}
-
-class Bullet {
-  constructor(x, y, angle, ownerId) {
-    this.x = x; this.y = y; this.angle = angle; this.speed = 10; this.ownerId = ownerId; this.life = 100;
-  }
-  update() {
-    this.x += Math.cos(this.angle) * this.speed;
-    this.y += Math.sin(this.angle) * this.speed;
-    this.life--;
-  }
-  draw(targetCtx) {
-    targetCtx.fillStyle = '#ffeb3b';
-    targetCtx.beginPath();
-    targetCtx.arc(this.x, this.y, 4, 0, Math.PI * 2);
-    targetCtx.fill();
-  }
-}
-
-function checkCollision(x, y, radius) {
-  if (x - radius < 0 || x + radius > MAP_WIDTH || y - radius < 0 || y + radius > MAP_HEIGHT) return true;
-  for (let obs of obstacles) {
-    if (x + radius > obs.x && x - radius < obs.x + obs.w && y + radius > obs.y && y - radius < obs.y + obs.h) return true;
-  }
-  return false;
-}
-
-function startGame(mode) {
-  gameMode = mode;
-  document.getElementById('menu-overlay').style.display = 'none';
-  document.getElementById('p2-hud').style.display = mode === 'pvp' ? 'block' : 'none';
-  document.getElementById('game-mode-hud').innerText = mode === 'pve' ? 'MODE: PVE' : 'MODE: SPLIT-SCREEN PvP';
-
-  obstacles = [];
-  for (let i = 0; i < 30; i++) {
-    obstacles.push({
-      x: Math.random() * (MAP_WIDTH - 200) + 100,
-      y: Math.random() * (MAP_HEIGHT - 200) + 100,
-      w: 100, h: 100
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'w') keys.up = true;
+        if (e.key === 'ArrowDown' || e.key === 's') keys.down = true;
+        if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+        if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+        if (e.key === ' ') shootBullet(player);
     });
-  }
 
-  if (mode === 'pve') {
-    tanks = [
-      new Tank(400, 400, '#ffd700', true, 'Player (Gold)', 'p1'),
-      new Tank(MAP_WIDTH - 400, MAP_HEIGHT - 400, '#c0c0c0', false, 'AI Bot (Silver)', 'ai')
-    ];
-  } else {
-    tanks = [
-      new Tank(400, MAP_HEIGHT / 2, '#ffd700', true, 'P1 (Gold)', 'p1'),
-      new Tank(MAP_WIDTH - 400, MAP_HEIGHT / 2, '#00ffff', true, 'P2 (Cyan)', 'p2')
-    ];
-  }
+    window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'w') keys.up = false;
+        if (e.key === 'ArrowDown' || e.key === 's') keys.down = false;
+        if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+        if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+    });
 
-  bullets = [];
-  gameActive = true;
-}
-
-function drawWorld(targetCtx, cameraX, cameraY) {
-  targetCtx.save();
-  targetCtx.translate(-cameraX, -cameraY);
-
-  targetCtx.strokeStyle = '#252525';
-  targetCtx.lineWidth = 1;
-  for (let x = 0; x < MAP_WIDTH; x += 100) {
-    targetCtx.beginPath(); targetCtx.moveTo(x, 0); targetCtx.lineTo(x, MAP_HEIGHT); targetCtx.stroke();
-  }
-  for (let y = 0; y < MAP_HEIGHT; y += 100) {
-    targetCtx.beginPath(); targetCtx.moveTo(0, y); targetCtx.lineTo(MAP_WIDTH, y); targetCtx.stroke();
-  }
-
-  targetCtx.strokeStyle = '#e10600';
-  targetCtx.lineWidth = 6;
-  targetCtx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-
-  targetCtx.fillStyle = '#333';
-  targetCtx.strokeStyle = '#555';
-  targetCtx.lineWidth = 2;
-  obstacles.forEach(obs => {
-    targetCtx.fillRect(obs.x, obs.y, obs.w, obs.h);
-    targetCtx.strokeRect(obs.x, obs.y, obs.w, obs.h);
-  });
-
-  tanks.forEach(tank => tank.draw(targetCtx));
-  bullets.forEach(b => b.draw(targetCtx));
-
-  targetCtx.restore();
-}
-
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (gameActive) {
-    tanks.forEach(t => t.update());
-
-    for (let i = bullets.length - 1; i >= 0; i--) {
-      let b = bullets[i];
-      b.update();
-      if (checkCollision(b.x, b.y, 2) || b.life <= 0) {
-        bullets.splice(i, 1);
-        continue;
-      }
-      for (let t of tanks) {
-        if (t.id !== b.ownerId && Math.hypot(t.x - b.x, t.y - b.y) < t.radius) {
-          t.hp -= 25;
-          bullets.splice(i, 1);
-          if (t.hp <= 0) {
-            alert(t.name + " Destroyed! Match Over.");
-            document.getElementById('menu-overlay').style.display = 'flex';
-            gameActive = false;
-          }
-          break;
+    function checkObstacleCollision(x, y, radius = 22) {
+        for (let obs of obstacles) {
+            if (x + radius > obs.x && x - radius < obs.x + obs.w &&
+                y + radius > obs.y && y - radius < obs.y + obs.h) {
+                return true;
+            }
         }
-      }
+        return false;
     }
 
-    if (gameMode === 'pve') {
-      document.getElementById('p1-hud').innerText = `Player HP: ${Math.max(0, tanks[0].hp)}`;
-    } else {
-      document.getElementById('p1-hud').innerText = `P1 HP: ${Math.max(0, tanks[0].hp)}`;
-      document.getElementById('p2-hud').innerText = `P2 HP: ${Math.max(0, tanks[1].hp)}`;
+    function isLineOfSightClear(x1, y1, x2, y2) {
+        const steps = 30;
+        for (let i = 0; i <= steps; i++) {
+            const px = x1 + (x2 - x1) * (i / steps);
+            const py = y1 + (y2 - y1) * (i / steps);
+            if (checkObstacleCollision(px, py, 4)) return false;
+        }
+        return true;
     }
 
-    if (gameMode === 'pve') {
-      let p1 = tanks[0];
-      let camX = Math.max(0, Math.min(p1.x - canvas.width / 2, MAP_WIDTH - canvas.width));
-      let camY = Math.max(0, Math.min(p1.y - canvas.height / 2, MAP_HEIGHT - canvas.height));
-      drawWorld(ctx, camX, camY);
-    } else {
-      let halfW = canvas.width / 2;
+    function shootBullet(shooter) {
+        if (shooter.hp <= 0) return;
+        const now = Date.now();
+        if (now - shooter.lastShootTime < 450) return;
+        shooter.lastShootTime = now;
 
-      // P1 View (Left)
-      ctx.save();
-      ctx.beginPath(); ctx.rect(0, 0, halfW, canvas.height); ctx.clip();
-      let p1 = tanks[0];
-      let cam1X = Math.max(0, Math.min(p1.x - halfW / 2, MAP_WIDTH - halfW));
-      let cam1Y = Math.max(0, Math.min(p1.y - canvas.height / 2, MAP_HEIGHT - canvas.height));
-      drawWorld(ctx, cam1X, cam1Y);
-      ctx.restore();
-
-      // Split Divider Line
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 4;
-      ctx.beginPath(); ctx.moveTo(halfW, 0); ctx.lineTo(halfW, canvas.height); ctx.stroke();
-
-      // P2 View (Right)
-      ctx.save();
-      ctx.beginPath(); ctx.rect(halfW, 0, halfW, canvas.height); ctx.clip();
-      let p2 = tanks[1];
-      let cam2X = Math.max(0, Math.min(p2.x - halfW / 2, MAP_WIDTH - halfW));
-      let cam2Y = Math.max(0, Math.min(p2.y - canvas.height / 2, MAP_HEIGHT - canvas.height));
-      ctx.translate(halfW, 0);
-      drawWorld(ctx, cam2X, cam2Y);
-      ctx.restore();
+        const bulletSpeed = 10;
+        const fireAngle = shooter.angle - Math.PI / 2;
+        bullets.push({
+            x: shooter.x + Math.cos(fireAngle) * 32,
+            y: shooter.y + Math.sin(fireAngle) * 32,
+            vx: Math.cos(fireAngle) * bulletSpeed,
+            vy: Math.sin(fireAngle) * bulletSpeed,
+            owner: shooter
+        });
     }
-  }
 
-  requestAnimationFrame(gameLoop);
-}
+    setInterval(() => {
+        if (matchTime > 0) {
+            matchTime--;
+            const mins = String(Math.floor(matchTime / 60)).padStart(2, '0');
+            const secs = String(matchTime % 60).padStart(2, '0');
+            document.getElementById('timer-display').innerText = `${mins}:${secs}`;
+        }
 
-gameLoop();
+        if (zoneStateTimer > 0) {
+            zoneStateTimer--;
+            document.getElementById('zone-timer').innerText = `Zone Shrinking in ${zoneStateTimer}s`;
+        } else {
+            zone.targetRadius = Math.max(150, zone.targetRadius - 180);
+            zoneStateTimer = 35;
+        }
+    }, 1000);
+
+    function update() {
+        if (zone.currentRadius > zone.targetRadius) {
+            zone.currentRadius -= 0.4;
+        }
+
+        if (player.hp > 0) {
+            if (keys.left) player.angle -= player.rotationSpeed;
+            if (keys.right) player.angle += player.rotationSpeed;
+
+            let moveSpeed = 0;
+            if (keys.up) moveSpeed = player.speed;
+            if (keys.down) moveSpeed = -player.speed * 0.6;
+
+            const moveAngle = player.angle - Math.PI / 2;
+            let nextX = player.x + Math.cos(moveAngle) * moveSpeed;
+            let nextY = player.y + Math.sin(moveAngle) * moveSpeed;
+
+            if (!checkObstacleCollision(nextX, player.y)) player.x = nextX;
+            if (!checkObstacleCollision(player.x, nextY)) player.y = nextY;
+
+            player.x = Math.max(30, Math.min(MAP_SIZE - 30, player.x));
+            player.y = Math.max(30, Math.min(MAP_SIZE - 30, player.y));
+
+            if (Math.hypot(player.x - zone.x, player.y - zone.y) > zone.currentRadius) {
+                player.hp = Math.max(0, player.hp - 0.1);
+            }
+        }
+
+        document.getElementById('health-bar').style.width = `${player.hp}%`;
+
+        const allLivingTanks = [player, ...enemies].filter(t => t.hp > 0);
+
+        enemies.forEach(bot => {
+            if (bot.hp <= 0) return;
+
+            let nearestEnemy = null;
+            let minDistance = Infinity;
+
+            allLivingTanks.forEach(target => {
+                if (target !== bot) {
+                    const d = Math.hypot(target.x - bot.x, target.y - bot.y);
+                    if (d < minDistance) {
+                        minDistance = d;
+                        nearestEnemy = target;
+                    }
+                }
+            });
+
+            const hasLineOfSight = nearestEnemy ? isLineOfSightClear(bot.x, bot.y, nearestEnemy.x, nearestEnemy.y) : false;
+            let targetX = zone.x;
+            let targetY = zone.y;
+
+            const botDistFromZoneCenter = Math.hypot(bot.x - zone.x, bot.y - zone.y);
+            if (botDistFromZoneCenter > zone.currentRadius - 80) {
+                targetX = zone.x;
+                targetY = zone.y;
+            } else if (nearestEnemy && hasLineOfSight && minDistance < 600) {
+                targetX = nearestEnemy.x;
+                targetY = nearestEnemy.y;
+            } else {
+                bot.stateTimer--;
+                if (bot.stateTimer <= 0 || !bot.targetPos) {
+                    bot.stateTimer = 160 + Math.random() * 100;
+                    bot.targetPos = {
+                        x: zone.x + (Math.random() - 0.5) * (zone.currentRadius * 1.1),
+                        y: zone.y + (Math.random() - 0.5) * (zone.currentRadius * 1.1)
+                    };
+                }
+                targetX = bot.targetPos.x;
+                targetY = bot.targetPos.y;
+            }
+
+            const dx = targetX - bot.x;
+            const dy = targetY - bot.y;
+            let targetAngle = Math.atan2(dy, dx) + Math.PI / 2;
+
+            if (checkObstacleCollision(bot.x + Math.cos(bot.angle - Math.PI / 2) * 50, bot.y + Math.sin(bot.angle - Math.PI / 2) * 50)) {
+                targetAngle += Math.PI / 2;
+            }
+
+            let angleDiff = targetAngle - bot.angle;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+            bot.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), bot.rotationSpeed);
+
+            const botMoveAngle = bot.angle - Math.PI / 2;
+            let nextBotX = bot.x + Math.cos(botMoveAngle) * bot.speed;
+            let nextBotY = bot.y + Math.sin(botMoveAngle) * bot.speed;
+
+            if (!checkObstacleCollision(nextBotX, bot.y)) bot.x = nextBotX;
+            if (!checkObstacleCollision(bot.x, nextBotY)) bot.y = nextBotY;
+
+            if (nearestEnemy && hasLineOfSight && Math.abs(angleDiff) < 0.3 && minDistance < 550) {
+                shootBullet(bot);
+            }
+
+            if (botDistFromZoneCenter > zone.currentRadius) {
+                bot.hp = Math.max(0, bot.hp - 0.15);
+            }
+        });
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const b = bullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+
+            if (checkObstacleCollision(b.x, b.y, 4) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) {
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            if (b.owner !== player && player.hp > 0 && Math.hypot(b.x - player.x, b.y - player.y) < 22) {
+                player.hp = Math.max(0, player.hp - 15);
+                if (player.hp === 0) b.owner.kills++;
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            enemies.forEach(bot => {
+                if (b.owner !== bot && bot.hp > 0 && Math.hypot(b.x - bot.x, b.y - bot.y) < 22) {
+                    bot.hp = Math.max(0, bot.hp - 35);
+                    if (bot.hp === 0) b.owner.kills++;
+                    bullets.splice(i, 1);
+                }
+            });
+        }
+
+        updateLeaderboard();
+    }
+
+    function updateLeaderboard() {
+        const all = [player, ...enemies];
+        all.sort((a, b) => b.kills - a.kills || b.hp - a.hp);
+
+        const list = document.getElementById('leaderboard-list');
+        list.innerHTML = '';
+        all.forEach((ent, idx) => {
+            const row = document.createElement('div');
+            row.className = `leaderboard-row ${ent === player ? 'player-row' : ''}`;
+            row.innerHTML = `<span>#${idx + 1} ${ent.id} ${ent.hp <= 0 ? '☠️' : ''}</span> <span>${ent.kills} K</span>`;
+            list.appendChild(row);
+        });
+    }
+
+    function drawTank(x, y, angle, imgKey) {
+        ctx.save();
+        ctx.translate(x, y);
+        // Correctly offsets sprite asset rotation without overlapping a fallback shape underneath
+        ctx.rotate(angle - Math.PI / 2);
+
+        const img = images[imgKey];
+        if (img && img.complete && img.naturalWidth !== 0) {
+            ctx.drawImage(img, -28, -28, 56, 56);
+        }
+
+        ctx.restore();
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
+
+        ctx.strokeStyle = '#212730';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= MAP_SIZE; x += 80) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
+        }
+        for (let y = 0; y <= MAP_SIZE; y += 80) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
+        }
+
+        ctx.fillStyle = '#2c3542';
+        ctx.strokeStyle = '#151a21';
+        ctx.lineWidth = 3;
+        obstacles.forEach(obs => {
+            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+        });
+
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(zone.x, zone.y, zone.currentRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (player.hp > 0) {
+            drawTank(player.x, player.y, player.angle, player.imgKey);
+        }
+
+        enemies.forEach(bot => {
+            if (bot.hp > 0) {
+                drawTank(bot.x, bot.y, bot.angle, bot.imgKey);
+            }
+        });
+
+        bullets.forEach(b => {
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        ctx.restore();
+    }
+
+    function gameLoop() {
+        update();
+        render();
+        requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
 </script>
+
 </body>
 </html>
