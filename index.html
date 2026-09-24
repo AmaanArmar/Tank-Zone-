@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>2D Top-Down Tank Battle - Phased Zone</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body, html { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: sans-serif; user-select: none; }
+  #game-container { width: 100vw; height: 100vh; position: relative; }
+  canvas { display: block; background: #222; }
+
+  #hud {
+    position: absolute; top: 12px; left: 12px; right: 12px;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    color: white; font-weight: bold; font-size: 0.9rem; pointer-events: none; z-index: 5;
+  }
+  .hud-card { background: rgba(0, 0, 0, 0.8); padding: 8px 16px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); }
+  .zone-timer { color: #ff5252; text-shadow: 0 0 5px rgba(255, 82, 82, 0.8); }
+
+  #leaderboard {
+    background: rgba(0, 0, 0, 0.8); padding: 10px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+    min-width: 160px;
+  }
+  #leaderboard h4 { border-bottom: 1px solid #555; padding-bottom: 4px; margin-bottom: 6px; text-align: center; color: #ffeb3b; }
+  .lb-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; margin-bottom: 3px; }
+  .lb-eliminated { color: #888; text-decoration: line-through; }
+
+  #controls {
+    position: absolute; bottom: 20px; left: 20px; right: 20px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    pointer-events: none; z-index: 5; touch-action: none;
+  }
+  .dpad { display: grid; grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(3, 50px); gap: 5px; pointer-events: auto; }
+  .btn {
+    background: rgba(255, 255, 255, 0.25); border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 8px; color: white; display: flex; justify-content: center; align-items: center; font-size: 20px; cursor: pointer;
+  }
+  .btn:active { background: rgba(76, 175, 80, 0.7); }
+  #btn-up { grid-column: 2; grid-row: 1; }
+  #btn-left { grid-column: 1; grid-row: 2; }
+  #btn-right { grid-column: 3; grid-row: 2; }
+  #btn-down { grid-column: 2; grid-row: 3; }
+
+  #btn-fire {
+    width: 80px; height: 80px; border-radius: 50%; background: rgba(244, 67, 54, 0.85);
+    color: white; font-weight: bold; display: flex; justify-content: center;
+    align-items: center; pointer-events: auto; border: 2px solid white; cursor: pointer;
+  }
+
+  #game-overlay {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.85);
+    display: flex; flex-direction: column; justify-content: center;
+    align-items: center; color: white; z-index: 10;
+  }
+  #start-btn {
+    padding: 12px 28px; font-size: 1.1rem; font-weight: bold;
+    background: #2196f3; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 15px;
+  }
+  
+  #placement-badge {
+    font-size: 3rem; font-weight: 900; color: #ffd700; text-shadow: 0 0 20px rgba(255, 215, 0, 0.6); margin: 10px 0;
+  }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div id="hud">
+    <div class="hud-card">
+      <div>PLAYER HP: <span id="player-hp">100</span></div>
+      <div>KILLS: <span id="player-kills">0</span></div>
+      <div class="zone-timer">ZONE: <span id="zone-status">WAITING...</span></div>
+    </div>
+    
+    <div id="leaderboard">
+      <h4>LEADERBOARD</h4>
+      <div id="lb-list"></div>
+    </div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="controls">
+    <div class="dpad">
+      <div class="btn" id="btn-up">▲</div>
+      <div class="btn" id="btn-left">◄</div>
+      <div class="btn" id="btn-right">►</div>
+      <div class="btn" id="btn-down">▼</div>
+    </div>
+    <div id="btn-fire">FIRE</div>
+  </div>
+
+  <div id="game-overlay">
+    <h1 id="overlay-title">4-PLAYER BATTLE ROYALE</h1>
+    <div id="placement-badge"></div>
+    <p id="overlay-sub">Move into the safe zone before it shrinks!</p>
+    <button id="start-btn">START BATTLE</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const MAP_WIDTH = 3000;
+const MAP_HEIGHT = 3000;
+const camera = { x: 0, y: 0 };
+
+// Phased Zone System
+const zonePhases = [
+  { pauseSec: 10, shrinkSec: 15, targetSize: 2100 },
+  { pauseSec: 10, shrinkSec: 10, targetSize: 1300 },
+  { pauseSec: 10, shrinkSec: 5,  targetSize: 600 }
+];
+
+let zone = {
+  x: 0,
+  y: 0,
+  width: MAP_WIDTH,
+  height: MAP_HEIGHT,
+  currentPhase: 0,
+  timer: 0,
+  state: 'PAUSED', // 'PAUSED' or 'SHRINKING'
+  shrinkSpeed: 0
+};
+
+const tankImages = {
+  player: new Image(),
+  enemy1: new Image(),
+  enemy2: new Image(),
+  enemy3: new Image()
+};
+
+tankImages.player.src = '2830.png';
+tankImages.enemy1.src = '2835.jpg';
+tankImages.enemy2.src = '2839.jpg';
+tankImages.enemy3.src = '2834.jpg';
+
+let gameActive = false;
+let player, tanks = [], eliminatedTanks = [], bullets = [], obstacles = [];
+let keys = { up: false, down: false, left: false, right: false };
+
+class Tank {
+  constructor(x, y, color, imgKey, isPlayer = false, name = "Tank") {
+    this.x = x;
+    this.y = y;
+    this.width = 40;
+    this.height = 60;
+    this.radius = 20;
+    this.angle = 0;
+    this.speed = isPlayer ? 4.5 : 2.5;
+    this.turnSpeed = 0.05;
+    this.color = color;
+    this.imgKey = imgKey;
+    this.img = tankImages[imgKey];
+    this.isPlayer = isPlayer;
+    this.name = name;
+    this.hp = 100;
+    this.maxHp = 100;
+    this.reload = 0;
+    this.kills = 0;
+    this.id = Math.random();
+    this.placement = null;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+
+    if (this.img && this.img.complete && this.img.naturalWidth !== 0) {
+      ctx.drawImage(this.img, -this.width / 2, -this.height / 2, this.width, this.height);
+    } else {
+      ctx.fillStyle = this.color;
+      ctx.fillRect(-20, -20, 40, 40);
+      ctx.fillStyle = '#111';
+      ctx.fillRect(-4, -35, 8, 20);
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.fillStyle = '#444';
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(this.x - 20, this.y - 45, 40, 6);
+    ctx.fillStyle = this.isPlayer ? '#4caf50' : '#e53935';
+    ctx.fillRect(this.x - 20, this.y - 45, (this.hp / this.maxHp) * 40, 6);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.name, this.x, this.y - 52);
+  }
+
+  update() {
+    if (this.reload > 0) this.reload--;
+
+    // Zone Damage Check
+    if (this.x < zone.x || this.x > zone.x + zone.width || this.y < zone.y || this.y > zone.y + zone.height) {
+      this.hp -= 0.2;
+      if (this.hp <= 0 && gameActive) {
+        handleTankElimination(this, null);
+      }
+    }
+
+    if (this.isPlayer) {
+      if (keys.left) this.angle -= this.turnSpeed;
+      if (keys.right) this.angle += this.turnSpeed;
+
+      let moveDir = 0;
+      if (keys.up) moveDir = 1;
+      if (keys.down) moveDir = -0.5;
+
+      if (moveDir !== 0) {
+        const nextX = this.x + Math.sin(this.angle) * this.speed * moveDir;
+        const nextY = this.y - Math.cos(this.angle) * this.speed * moveDir;
+
+        if (!checkWallCollision(nextX, nextY, this.radius)) {
+          this.x = nextX;
+          this.y = nextY;
+        }
+      }
+    } else {
+      // AI behavior: Strictly avoid closing zone walls
+      const safeBuffer = 120;
+      const isNearOrOutsideZone = this.x < zone.x + safeBuffer || 
+                                   this.x > zone.x + zone.width - safeBuffer ||
+                                   this.y < zone.y + safeBuffer || 
+                                   this.y > zone.y + zone.height - safeBuffer;
+
+      let targetX, targetY;
+      const zoneCenterX = zone.x + zone.width / 2;
+      const zoneCenterY = zone.y + zone.height / 2;
+
+      let nearestOpponent = null;
+      let minDist = Infinity;
+
+      tanks.forEach(otherTank => {
+        if (otherTank.id !== this.id) {
+          const dist = Math.hypot(otherTank.x - this.x, otherTank.y - this.y);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestOpponent = otherTank;
+          }
+        }
+      });
+
+      if (isNearOrOutsideZone) {
+        // Priority 1: Move towards zone center to stay safe
+        targetX = zoneCenterX;
+        targetY = zoneCenterY;
+      } else if (nearestOpponent) {
+        // Priority 2: Engage nearest opponent when safely inside zone
+        targetX = nearestOpponent.x;
+        targetY = nearestOpponent.y;
+      } else {
+        targetX = zoneCenterX;
+        targetY = zoneCenterY;
+      }
+
+      const targetAngle = Math.atan2(targetY - this.y, targetX - this.x) + Math.PI / 2;
+      let diff = targetAngle - this.angle;
+
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+
+      this.angle += Math.sign(diff) * Math.min(Math.abs(diff), this.turnSpeed * 0.85);
+
+      if (nearestOpponent && Math.abs(diff) < 0.35 && minDist < 650 && !isNearOrOutsideZone) {
+        this.shoot();
+      }
+
+      const nextX = this.x + Math.sin(this.angle) * (this.speed * 0.7);
+      const nextY = this.y - Math.cos(this.angle) * (this.speed * 0.7);
+
+      if (!checkWallCollision(nextX, nextY, this.radius)) {
+        this.x = nextX;
+        this.y = nextY;
+      } else {
+        this.angle += Math.PI / 2;
+      }
+    }
+  }
+
+  shoot() {
+    if (this.reload <= 0) {
+      bullets.push(new Bullet(
+        this.x + Math.sin(this.angle) * 35,
+        this.y - Math.cos(this.angle) * 35,
+        this.angle,
+        this.id
+      ));
+      this.reload = 35;
+    }
+  }
+}
+
+class Bullet {
+  constructor(x, y, angle, ownerId) {
+    this.x = x;
+    this.y = y;
+    this.angle = angle;
+    this.speed = 10;
+    this.ownerId = ownerId;
+    this.life = 120;
+  }
+
+  draw() {
+    ctx.fillStyle = '#ffeb3b';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  update() {
+    this.x += Math.sin(this.angle) * this.speed;
+    this.y -= Math.cos(this.angle) * this.speed;
+    this.life--;
+  }
+}
+
+function checkWallCollision(x, y, radius) {
+  if (x - radius < 0 || x + radius > MAP_WIDTH || y - radius < 0 || y + radius > MAP_HEIGHT) return true;
+  for (let obs of obstacles) {
+    if (x + radius > obs.x && x - radius < obs.x + obs.w && y + radius > obs.y && y - radius < obs.y + obs.h) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function initZone() {
+  zone.x = 0;
+  zone.y = 0;
+  zone.width = MAP_WIDTH;
+  zone.height = MAP_HEIGHT;
+  zone.currentPhase = 0;
+  startZonePause();
+}
+
+function startZonePause() {
+  if (zone.currentPhase >= zonePhases.length) {
+    document.getElementById('zone-status').innerText = `FINAL ZONE!`;
+    document.getElementById('zone-status').style.color = '#f44336';
+    zone.state = 'COMPLETED';
+    return;
+  }
+
+  const phase = zonePhases[zone.currentPhase];
+  zone.state = 'PAUSED';
+  zone.timer = phase.pauseSec * 60;
+}
+
+function startZoneShrink() {
+  const phase = zonePhases[zone.currentPhase];
+  zone.state = 'SHRINKING';
+  zone.timer = phase.shrinkSec * 60;
+  const sizeDiff = zone.width - phase.targetSize;
+  zone.shrinkSpeed = sizeDiff / zone.timer;
+}
+
+function updateZone() {
+  const statusEl = document.getElementById('zone-status');
+
+  if (zone.state === 'PAUSED') {
+    zone.timer--;
+    const secs = Math.ceil(zone.timer / 60);
+    statusEl.innerText = `SHRINKING IN ${secs}s`;
+    statusEl.style.color = '#ffeb3b';
+
+    if (zone.timer <= 0) {
+      startZoneShrink();
+    }
+  } else if (zone.state === 'SHRINKING') {
+    zone.timer--;
+    const secs = Math.ceil(zone.timer / 60);
+    statusEl.innerText = `SHRINKING! (${secs}s)`;
+    statusEl.style.color = '#f44336';
+
+    zone.width -= zone.shrinkSpeed;
+    zone.height -= zone.shrinkSpeed;
+    zone.x += zone.shrinkSpeed / 2;
+    zone.y += zone.shrinkSpeed / 2;
+
+    if (zone.timer <= 0) {
+      zone.currentPhase++;
+      startZonePause();
+    }
+  }
+}
+
+function drawZone() {
+  ctx.fillStyle = 'rgba(244, 67, 54, 0.25)';
+
+  ctx.fillRect(0, 0, MAP_WIDTH, zone.y);
+  ctx.fillRect(0, zone.y + zone.height, MAP_WIDTH, MAP_HEIGHT - (zone.y + zone.height));
+  ctx.fillRect(0, zone.y, zone.x, zone.height);
+  ctx.fillRect(zone.x + zone.width, zone.y, MAP_WIDTH - (zone.x + zone.width), zone.height);
+
+  ctx.strokeStyle = '#f44336';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+}
+
+function getOrdinalSuffix(num) {
+  if (num === 1) return "1st";
+  if (num === 2) return "2nd";
+  if (num === 3) return "3rd";
+  return num + "th";
+}
+
+function updateLeaderboardUI() {
+  const lbList = document.getElementById('lb-list');
+  lbList.innerHTML = '';
+
+  const allTanks = [...tanks, ...eliminatedTanks];
+  allTanks.sort((a, b) => b.kills - a.kills || a.hp - b.hp);
+
+  allTanks.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'lb-row' + (t.hp <= 0 ? ' lb-eliminated' : '');
+    const statusText = t.hp <= 0 ? (t.placement ? getOrdinalSuffix(t.placement) : 'OUT') : `${t.kills} Kills`;
+    row.innerHTML = `<span>${t.name}</span><span>${statusText}</span>`;
+    lbList.appendChild(row);
+  });
+}
+
+function handleTankElimination(tank, killerId) {
+  if (killerId) {
+    const shooter = tanks.find(t => t.id === killerId);
+    if (shooter) shooter.kills++;
+  }
+
+  tank.placement = tanks.length;
+  eliminatedTanks.push(tank);
+  tanks = tanks.filter(t => t !== tank);
+
+  if (tank === player) {
+    endGame("YOU WERE ELIMINATED!", tank.placement);
+  } else if (tanks.length === 1) {
+    const winner = tanks[0];
+    winner.placement = 1;
+    if (winner === player) {
+      endGame("VICTORY! YOU WIN!", 1);
+    } else {
+      endGame(`${winner.name.toUpperCase()} WINS!`, player.placement);
+    }
+  }
+}
+
+function initGame() {
+  initZone();
+
+  obstacles = [];
+  for (let i = 0; i < 30; i++) {
+    obstacles.push({
+      x: Math.random() * (MAP_WIDTH - 300) + 150,
+      y: Math.random() * (MAP_HEIGHT - 300) + 150,
+      w: 120, h: 120
+    });
+  }
+
+  tanks = [
+    new Tank(400, 400, '#4caf50', 'player', true, "Player"),
+    new Tank(MAP_WIDTH - 400, 400, '#ff9800', 'enemy1', false, "Alpha"),
+    new Tank(400, MAP_HEIGHT - 400, '#2196f3', 'enemy2', false, "Bravo"),
+    new Tank(MAP_WIDTH - 400, MAP_HEIGHT - 400, '#9c27b0', 'enemy3', false, "Charlie")
+  ];
+
+  player = tanks[0];
+  eliminatedTanks = [];
+  bullets = [];
+  gameActive = true;
+  document.getElementById('game-overlay').style.display = 'none';
+  document.getElementById('placement-badge').innerText = '';
+}
+
+function setupInputs() {
+  window.addEventListener('keydown', e => {
+    if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.up = true;
+    if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.down = true;
+    if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.left = true;
+    if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = true;
+    if (e.key === ' ' && gameActive && player && player.hp > 0) player.shoot();
+  });
+
+  window.addEventListener('keyup', e => {
+    if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.up = false;
+    if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.down = false;
+    if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.left = false;
+    if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = false;
+  });
+
+  const bindBtn = (id, key) => {
+    const el = document.getElementById(id);
+    const press = (e) => { e.preventDefault(); keys[key] = true; };
+    const release = (e) => { e.preventDefault(); keys[key] = false; };
+    el.addEventListener('touchstart', press); el.addEventListener('touchend', release);
+    el.addEventListener('mousedown', press); el.addEventListener('mouseup', release);
+  };
+
+  bindBtn('btn-up', 'up'); bindBtn('btn-down', 'down');
+  bindBtn('btn-left', 'left'); bindBtn('btn-right', 'right');
+
+  document.getElementById('start-btn').addEventListener('click', initGame);
+  document.getElementById('btn-fire').addEventListener('click', () => { if (player && player.hp > 0) player.shoot(); });
+}
+
+function drawGrid() {
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  const gridSize = 100;
+  for (let x = 0; x < MAP_WIDTH; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_HEIGHT); ctx.stroke();
+  }
+  for (let y = 0; y < MAP_HEIGHT; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_WIDTH, y); ctx.stroke();
+  }
+}
+
+function endGame(msg, playerPlacement) {
+  gameActive = false;
+  document.getElementById('overlay-title').innerText = msg;
+  document.getElementById('placement-badge').innerText = `${getOrdinalSuffix(playerPlacement)} PLACE`;
+  document.getElementById('overlay-sub').innerText = `You finished in ${getOrdinalSuffix(playerPlacement)} position!`;
+  document.getElementById('start-btn').innerText = "PLAY AGAIN";
+  document.getElementById('game-overlay').style.display = 'flex';
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (gameActive) {
+    if (player && tanks.includes(player)) {
+      camera.x = player.x - canvas.width / 2;
+      camera.y = player.y - canvas.height / 2;
+      document.getElementById('player-hp').innerText = Math.max(0, Math.ceil(player.hp));
+      document.getElementById('player-kills').innerText = player.kills;
+    } else {
+      document.getElementById('player-hp').innerText = 0;
+    }
+
+    camera.x = Math.max(0, Math.min(camera.x, MAP_WIDTH - canvas.width));
+    camera.y = Math.max(0, Math.min(camera.y, MAP_HEIGHT - canvas.height));
+
+    updateZone();
+    updateLeaderboardUI();
+
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    drawGrid();
+    drawZone();
+
+    // Draw Obstacles
+    ctx.fillStyle = '#444';
+    ctx.strokeStyle = '#666';
+    ctx.lineWidth = 3;
+    obstacles.forEach(obs => {
+      ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+      ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+    });
+
+    // Update & Draw Tanks
+    tanks.forEach(tank => {
+      tank.update();
+      tank.draw();
+    });
+
+    // Bullets Logic
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.update();
+      b.draw();
+
+      if (checkWallCollision(b.x, b.y, 2) || b.life <= 0) {
+        bullets.splice(i, 1);
+        continue;
+      }
+
+      for (let tank of tanks) {
+        if (tank.id !== b.ownerId && Math.hypot(tank.x - b.x, tank.y - b.y) < tank.radius) {
+          tank.hp -= 25;
+          bullets.splice(i, 1);
+
+          if (tank.hp <= 0) {
+            handleTankElimination(tank, b.ownerId);
+          }
+          break;
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+setupInputs();
+gameLoop();
+</script>
+</body>
+  </html>
+  
