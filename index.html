@@ -30,6 +30,28 @@
     font-weight: bold; font-size: 14px; color: white; text-shadow: 1px 1px 2px #000;
   }
   .hud-box { background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 4px; border: 1px solid #444; }
+
+  /* On-Screen Mobile/Touch Controls */
+  .touch-controls {
+    position: absolute; bottom: 20px; left: 20px; right: 20px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    pointer-events: none; z-index: 5; touch-action: none; display: none;
+  }
+  .dpad { display: grid; grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(3, 50px); gap: 5px; pointer-events: auto; }
+  .ctrl-btn {
+    background: rgba(255, 255, 255, 0.25); border: 2px solid rgba(255, 255, 255, 0.6);
+    border-radius: 8px; color: white; display: flex; justify-content: center; align-items: center; font-size: 20px; cursor: pointer;
+  }
+  .ctrl-btn:active { background: rgba(76, 175, 80, 0.7); }
+  .btn-up { grid-column: 2; grid-row: 1; }
+  .btn-left { grid-column: 1; grid-row: 2; }
+  .btn-right { grid-column: 3; grid-row: 2; }
+  .btn-down { grid-column: 2; grid-row: 3; }
+  .fire-btn {
+    width: 70px; height: 70px; border-radius: 50%; background: rgba(225, 6, 0, 0.85);
+    color: white; font-weight: bold; display: flex; justify-content: center;
+    align-items: center; pointer-events: auto; border: 2px solid white; cursor: pointer; font-size: 14px;
+  }
 </style>
 </head>
 <body>
@@ -42,6 +64,17 @@
   </div>
 
   <canvas id="gameCanvas"></canvas>
+
+  <!-- Mobile Touch Controls Layout -->
+  <div id="touch-controls" class="touch-controls">
+    <div class="dpad">
+      <div class="ctrl-btn btn-up" id="t-up">▲</div>
+      <div class="ctrl-btn btn-left" id="t-left">◄</div>
+      <div class="ctrl-btn btn-right" id="t-right">►</div>
+      <div class="ctrl-btn btn-down" id="t-down">▼</div>
+    </div>
+    <div class="fire-btn" id="t-fire">FIRE</div>
+  </div>
 
   <div id="menu-overlay">
     <h1>Tank Arena Battle</h1>
@@ -65,18 +98,41 @@ resizeCanvas();
 const MAP_WIDTH = 2500;
 const MAP_HEIGHT = 2500;
 
-// Tank Image Loading
+// Tank Image Safe Loader
 const tankImg = new Image();
-tankImg.src = '2839.png'; // Uses your primary working tank asset
+tankImg.src = '2839.png';
+let imageLoaded = false;
+tankImg.onload = () => { imageLoaded = true; };
 
-let gameMode = 'pve'; // 'pve' or 'pvp'
+let gameMode = 'pve'; 
 let gameActive = false;
 let tanks = [], bullets = [], obstacles = [];
 let keys = {};
 
+// Detect Mobile Device to show touch buttons
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+if (isMobile) {
+  document.getElementById('touch-controls').style.display = 'flex';
+}
+
 // Key Listeners
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// Touch Controller Hookups
+function bindTouch(id, keyName) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  const press = (e) => { e.preventDefault(); keys[keyName] = true; };
+  const release = (e) => { e.preventDefault(); keys[keyName] = false; };
+  el.addEventListener('touchstart', press); el.addEventListener('touchend', release);
+  el.addEventListener('mousedown', press); el.addEventListener('mouseup', release);
+}
+bindTouch('t-up', 'w');
+bindTouch('t-left', 'a');
+bindTouch('t-right', 'd');
+bindTouch('t-down', 's');
+document.getElementById('t-fire').addEventListener('click', () => { if(tanks[0]) tanks[0].shoot(); });
 
 class Tank {
   constructor(x, y, colorTint, isPlayer, name, controls) {
@@ -91,7 +147,7 @@ class Tank {
     this.colorTint = colorTint;
     this.isPlayer = isPlayer;
     this.name = name;
-    this.controls = controls; // 'p1', 'p2', or 'ai'
+    this.controls = controls; 
     this.hp = 100;
     this.reload = 0;
     this.id = Math.random();
@@ -119,7 +175,6 @@ class Tank {
       if (keys['enter']) this.shoot();
     } 
     else if (this.controls === 'ai') {
-      // Basic hunting AI
       let target = tanks.find(t => t.id !== this.id);
       if (target) {
         let targetAngle = Math.atan2(target.y - this.y, target.x - this.x);
@@ -160,30 +215,39 @@ class Tank {
     targetCtx.translate(this.x, this.y);
     targetCtx.rotate(this.angle + Math.PI / 2);
 
-    if (tankImg.complete && tankImg.naturalWidth !== 0) {
+    if (imageLoaded) {
       targetCtx.drawImage(tankImg, -this.width / 2, -this.height / 2, this.width, this.height);
-      // Optional overlay tint for custom look
+      // Apply color filter tint
       if (this.colorTint) {
         targetCtx.globalCompositeOperation = 'source-atop';
         targetCtx.fillStyle = this.colorTint;
         targetCtx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
       }
     } else {
+      // Fallback procedural detailed tank design if image path fails
       targetCtx.fillStyle = this.colorTint || '#fff';
-      targetCtx.fillRect(-20, -20, 40, 40);
+      targetCtx.fillRect(-18, -25, 36, 50); // Hull
+      targetCtx.fillStyle = '#222';
+      targetCtx.fillRect(-22, -20, 6, 40); // Left Tread
+      targetCtx.fillRect(16, -20, 6, 40);  // Right Tread
+      targetCtx.fillStyle = '#444';
+      targetCtx.fillRect(-4, -35, 8, 30);  // Cannon
+      targetCtx.beginPath();
+      targetCtx.arc(0, 0, 12, 0, Math.PI * 2);
+      targetCtx.fill();                    // Turret Dome
     }
     targetCtx.restore();
 
     // Health bar & label
     targetCtx.fillStyle = 'rgba(0,0,0,0.6)';
-    targetCtx.fillRect(this.x - 20, this.y - 42, 40, 6);
+    targetCtx.fillRect(this.x - 20, this.y - 45, 40, 6);
     targetCtx.fillStyle = '#4caf50';
-    targetCtx.fillRect(this.x - 20, this.y - 42, (this.hp / 100) * 40, 6);
+    targetCtx.fillRect(this.x - 20, this.y - 45, (this.hp / 100) * 40, 6);
 
     targetCtx.fillStyle = '#fff';
     targetCtx.font = '11px sans-serif';
     targetCtx.textAlign = 'center';
-    targetCtx.fillText(this.name, this.x, this.y - 48);
+    targetCtx.fillText(this.name, this.x, this.y - 52);
   }
 }
 
@@ -218,7 +282,6 @@ function startGame(mode) {
   document.getElementById('p2-hud').style.display = mode === 'pvp' ? 'block' : 'none';
   document.getElementById('game-mode-hud').innerText = mode === 'pve' ? 'MODE: PVE' : 'MODE: SPLIT-SCREEN PvP';
 
-  // Generate Obstacles
   obstacles = [];
   for (let i = 0; i < 30; i++) {
     obstacles.push({
@@ -228,16 +291,15 @@ function startGame(mode) {
     });
   }
 
-  // Set Tanks based on mode
   if (mode === 'pve') {
     tanks = [
-      new Tank(400, 400, '#ffd700', true, 'Player (Gold)', 'p1'),
-      new Tank(MAP_WIDTH - 400, MAP_HEIGHT - 400, '#c0c0c0', false, 'AI Bot (Silver)', 'ai')
+      new Tank(400, 400, 'rgba(255, 215, 0, 0.75)', true, 'Player (Gold)', 'p1'),
+      new Tank(MAP_WIDTH - 400, MAP_HEIGHT - 400, 'rgba(192, 192, 192, 0.75)', false, 'AI Bot (Silver)', 'ai')
     ];
   } else {
     tanks = [
-      new Tank(400, MAP_HEIGHT / 2, '#ffd700', true, 'Player 1 (Gold)', 'p1'),
-      new Tank(MAP_WIDTH - 400, MAP_HEIGHT / 2, '#00ffff', true, 'Player 2 (Blue)', 'p2')
+      new Tank(400, MAP_HEIGHT / 2, 'rgba(255, 215, 0, 0.75)', true, 'P1 (Gold)', 'p1'),
+      new Tank(MAP_WIDTH - 400, MAP_HEIGHT / 2, 'rgba(0, 255, 255, 0.6)', true, 'P2 (Hologram)', 'p2')
     ];
   }
 
@@ -245,11 +307,10 @@ function startGame(mode) {
   gameActive = true;
 }
 
-function drawWorld(targetCtx, cameraX, cameraY, viewWidth, viewHeight) {
+function drawWorld(targetCtx, cameraX, cameraY) {
   targetCtx.save();
   targetCtx.translate(-cameraX, -cameraY);
 
-  // Background Grid Pattern
   targetCtx.strokeStyle = '#252525';
   targetCtx.lineWidth = 1;
   for (let x = 0; x < MAP_WIDTH; x += 100) {
@@ -259,12 +320,10 @@ function drawWorld(targetCtx, cameraX, cameraY, viewWidth, viewHeight) {
     targetCtx.beginPath(); targetCtx.moveTo(0, y); targetCtx.lineTo(MAP_WIDTH, y); targetCtx.stroke();
   }
 
-  // Map Border
   targetCtx.strokeStyle = '#e10600';
   targetCtx.lineWidth = 6;
   targetCtx.strokeRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
 
-  // Draw Obstacles
   targetCtx.fillStyle = '#333';
   targetCtx.strokeStyle = '#555';
   targetCtx.lineWidth = 2;
@@ -273,10 +332,7 @@ function drawWorld(targetCtx, cameraX, cameraY, viewWidth, viewHeight) {
     targetCtx.strokeRect(obs.x, obs.y, obs.w, obs.h);
   });
 
-  // Draw Tanks
   tanks.forEach(tank => tank.draw(targetCtx));
-
-  // Draw Bullets
   bullets.forEach(b => b.draw(targetCtx));
 
   targetCtx.restore();
@@ -286,7 +342,6 @@ function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (gameActive) {
-    // Update logic for tanks & bullets
     tanks.forEach(t => t.update());
 
     for (let i = bullets.length - 1; i >= 0; i--) {
@@ -301,7 +356,7 @@ function gameLoop() {
           t.hp -= 25;
           bullets.splice(i, 1);
           if (t.hp <= 0) {
-            alert(t.name + " Destroyed! Restarting Match.");
+            alert(t.name + " Destroyed! Match Over.");
             document.getElementById('menu-overlay').style.display = 'flex';
             gameActive = false;
           }
@@ -310,7 +365,6 @@ function gameLoop() {
       }
     }
 
-    // HUD Update
     if (gameMode === 'pve') {
       document.getElementById('p1-hud').innerText = `Player HP: ${Math.max(0, tanks[0].hp)}`;
     } else {
@@ -318,46 +372,36 @@ function gameLoop() {
       document.getElementById('p2-hud').innerText = `P2 HP: ${Math.max(0, tanks[1].hp)}`;
     }
 
-    // Render Viewports
     if (gameMode === 'pve') {
-      // Full screen view centered on Player 1
       let p1 = tanks[0];
       let camX = Math.max(0, Math.min(p1.x - canvas.width / 2, MAP_WIDTH - canvas.width));
       let camY = Math.max(0, Math.min(p1.y - canvas.height / 2, MAP_HEIGHT - canvas.height));
-      drawWorld(ctx, camX, camY, canvas.width, canvas.height);
+      drawWorld(ctx, camX, camY);
     } else {
-      // Split-Screen PvP (Side-by-Side Viewports)
       let halfW = canvas.width / 2;
 
-      // --- Player 1 View (Left Side) ---
+      // P1 View (Left)
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, halfW, canvas.height);
-      ctx.clip();
+      ctx.beginPath(); ctx.rect(0, 0, halfW, canvas.height); ctx.clip();
       let p1 = tanks[0];
       let cam1X = Math.max(0, Math.min(p1.x - halfW / 2, MAP_WIDTH - halfW));
       let cam1Y = Math.max(0, Math.min(p1.y - canvas.height / 2, MAP_HEIGHT - canvas.height));
-      drawWorld(ctx, cam1X, cam1Y, halfW, canvas.height);
+      drawWorld(ctx, cam1X, cam1Y);
       ctx.restore();
 
-      // Divider Line
+      // Split Divider
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(halfW, 0);
-      ctx.lineTo(halfW, canvas.height);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(halfW, 0); ctx.lineTo(halfW, canvas.height); ctx.stroke();
 
-      // --- Player 2 View (Right Side) ---
+      // P2 View (Right)
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(halfW, 0, halfW, canvas.height);
-      ctx.clip();
+      ctx.beginPath(); ctx.rect(halfW, 0, halfW, canvas.height); ctx.clip();
       let p2 = tanks[1];
       let cam2X = Math.max(0, Math.min(p2.x - halfW / 2, MAP_WIDTH - halfW));
       let cam2Y = Math.max(0, Math.min(p2.y - canvas.height / 2, MAP_HEIGHT - canvas.height));
       ctx.translate(halfW, 0);
-      drawWorld(ctx, cam2X, cam2Y, halfW, canvas.height);
+      drawWorld(ctx, cam2X, cam2Y);
       ctx.restore();
     }
   }
@@ -369,4 +413,3 @@ gameLoop();
 </script>
 </body>
 </html>
-
