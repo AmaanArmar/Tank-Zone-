@@ -2,52 +2,224 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Tank Battle</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>2.5D Realistic Tank Battle Royale</title>
     <style>
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
         }
         body {
-            background-color: #1a1a1a;
+            background-color: #0d1015;
             color: #ffffff;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            height: 100vh;
             overflow: hidden;
         }
         #game-container {
             position: relative;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+            width: 100vw;
+            height: 100vh;
         }
         canvas {
-            background-color: #2b2b2b;
             display: block;
-            border: 2px solid #444;
+            width: 100%;
+            height: 100%;
+            background-color: #1a202c;
         }
-        #ui-overlay {
+        
+        /* HUD OVERLAYS */
+        #hud {
             position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 16px;
-            font-weight: bold;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             pointer-events: none;
-            text-shadow: 1px 1px 2px #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+        }
+        
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .stats-panel {
+            background: rgba(10, 14, 20, 0.85);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(6px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        #timer-display {
+            font-size: 22px;
+            font-weight: 800;
+            color: #f39c12;
+            text-align: center;
+        }
+
+        #zone-timer {
+            font-size: 12px;
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 2px;
+        }
+
+        /* LEADERBOARD */
+        .leaderboard {
+            min-width: 190px;
+        }
+        .leaderboard h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #88a0c0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 4px;
+            margin-bottom: 6px;
+        }
+        .leaderboard-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .leaderboard-row.player-row {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        /* HEALTH BAR */
+        .health-box {
+            width: 200px;
+        }
+        .bar-bg {
+            width: 100%;
+            height: 12px;
+            background: #222;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid #444;
+            margin-top: 4px;
+        }
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e74c3c, #2ecc71);
+            width: 100%;
+            transition: width 0.1s linear;
+        }
+
+        /* ON-SCREEN TOUCH CONTROLS */
+        .controls-container {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            padding: 0 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .dpad, .fire-btn {
+            pointer-events: auto;
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 6px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px);
+        }
+        .btn:active {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        #btn-up { grid-column: 2; grid-row: 1; }
+        #btn-left { grid-column: 1; grid-row: 2; }
+        #btn-down { grid-column: 2; grid-row: 2; }
+        #btn-right { grid-column: 3; grid-row: 2; }
+
+        .fire-btn {
+            width: 85px;
+            height: 85px;
+            border-radius: 50%;
+            background: rgba(231, 76, 60, 0.85);
+            border: 3px solid #e74c3c;
+            font-size: 18px;
+            color: white;
+            font-weight: 900;
+            backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .fire-btn:active {
+            background: rgba(255, 0, 0, 1);
+            transform: scale(0.95);
         }
     </style>
 </head>
 <body>
 
 <div id="game-container">
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="ui-overlay">
-        <div>Player HP: <span id="player-hp">100</span></div>
-        <div>Enemy HP: <span id="enemy-hp">100</span></div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud">
+        <div class="top-bar">
+            <div class="stats-panel health-box">
+                <div style="font-size:12px; font-weight:bold;">PLAYER HEALTH</div>
+                <div class="bar-bg"><div id="health-bar" class="bar-fill"></div></div>
+            </div>
+
+            <div class="stats-panel">
+                <div id="timer-display">03:00</div>
+                <div id="zone-timer">Zone Shrinking in 30s</div>
+            </div>
+
+            <div class="stats-panel leaderboard">
+                <h3>Match Leaderboard</h3>
+                <div id="leaderboard-list"></div>
+            </div>
+        </div>
+
+        <div class="controls-container">
+            <div class="dpad">
+                <div class="btn" id="btn-up">▲</div>
+                <div class="btn" id="btn-left">◀</div>
+                <div class="btn" id="btn-down">▼</div>
+                <div class="btn" id="btn-right">▶</div>
+            </div>
+            <div class="btn fire-btn" id="btn-fire">FIRE</div>
+        </div>
     </div>
 </div>
 
@@ -55,137 +227,261 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
     // -------------------------------------------------------------
-    // 1. TANK PNG IMAGE LOADER
+    // 1. GAME MAP, OBSTACLES & SHRINKING SAFE ZONE
     // -------------------------------------------------------------
-    const tankImages = {
-        player: new Image(),
-        enemy1: new Image(),
-        enemy2: new Image(),
-        enemy3: new Image()
+    const MAP_SIZE = 1800;
+    let matchTime = 180;
+    let zoneStateTimer = 30;
+
+    const zone = {
+        x: MAP_SIZE / 2,
+        y: MAP_SIZE / 2,
+        currentRadius: 850,
+        targetRadius: 850
     };
 
-    // Make sure these filenames match your GitHub repository exactly!
-    tankImages.player.src = '2830.png';
-    tankImages.enemy1.src = '2835.png';
-    tankImages.enemy2.src = '2839.png';
-    tankImages.enemy3.src = '2834.png';
+    // Solid Obstacles (Blocks/Rocks)
+    const obstacles = [
+        { x: 500, y: 500, w: 120, h: 120 },
+        { x: 1200, y: 500, w: 120, h: 120 },
+        { x: 500, y: 1200, w: 120, h: 120 },
+        { x: 1200, y: 1200, w: 120, h: 120 },
+        { x: 820, y: 350, w: 160, h: 80 },
+        { x: 820, y: 1350, w: 160, h: 80 },
+        { x: 350, y: 820, w: 80, h: 160 },
+        { x: 1350, y: 820, w: 80, h: 160 }
+    ];
+
+    // Image Loader
+    const images = {};
+    function loadImage(key, src) {
+        images[key] = new Image();
+        images[key].src = src;
+    }
+    loadImage('player', '2830.png');
+    loadImage('enemy1', '2835.png');
+    loadImage('enemy2', '2839.png');
+    loadImage('enemy3', '2834.png');
+
+    const keys = { up: false, down: false, left: false, right: false };
 
     // -------------------------------------------------------------
-    // 2. GAME STATE & ENTITIES
+    // 2. ENTITIES (PLAYER & FREE-FOR-ALL AI BOTS)
     // -------------------------------------------------------------
-    const keys = {};
-
     const player = {
-        x: 100,
-        y: 300,
-        width: 40,
-        height: 40,
+        id: 'Player (You)',
+        x: 900,
+        y: 900,
         angle: 0,
-        speed: 3,
+        speed: 4,
         rotationSpeed: 0.05,
-        hp: 100
-    };
-
-    const aiTank = {
-        x: 700,
-        y: 300,
-        width: 40,
-        height: 40,
-        angle: Math.PI,
-        speed: 1.5,
         hp: 100,
+        kills: 0,
+        imgKey: 'player',
+        fallbackColor: '#3b5e2b',
         lastShootTime: 0
     };
 
-    const bullets = [];
-    const obstacles = [
-        { x: 350, y: 150, width: 100, height: 100, label: 'Stone Pillar' },
-        { x: 350, y: 350, width: 100, height: 100, label: 'Debris' }
+    const enemies = [
+        { id: 'Alpha Bot', x: 350, y: 350, angle: 0, hp: 100, kills: 0, speed: 2.3, rotationSpeed: 0.045, imgKey: 'enemy1', fallbackColor: '#7a3b2e', lastShootTime: 0 },
+        { id: 'Bravo Bot', x: 1450, y: 350, angle: Math.PI, hp: 100, kills: 0, speed: 2.3, rotationSpeed: 0.045, imgKey: 'enemy2', fallbackColor: '#2e4e7a', lastShootTime: 0 },
+        { id: 'Charlie Bot', x: 900, y: 1550, angle: -Math.PI / 2, hp: 100, kills: 0, speed: 2.3, rotationSpeed: 0.045, imgKey: 'enemy3', fallbackColor: '#5e2b5b', lastShootTime: 0 }
     ];
 
+    const bullets = [];
+
     // -------------------------------------------------------------
-    // 3. INPUT CONTROLS
+    // 3. CONTROLS & BINDINGS
     // -------------------------------------------------------------
+    function bindBtn(id, keyName) {
+        const btn = document.getElementById(id);
+        const start = (e) => { e.preventDefault(); keys[keyName] = true; };
+        const end = (e) => { e.preventDefault(); keys[keyName] = false; };
+        btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('touchend', end, { passive: false });
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', end);
+    }
+
+    bindBtn('btn-up', 'up');
+    bindBtn('btn-down', 'down');
+    bindBtn('btn-left', 'left');
+    bindBtn('btn-right', 'right');
+
+    const fireBtn = document.getElementById('btn-fire');
+    const triggerFire = (e) => { e.preventDefault(); shootBullet(player); };
+    fireBtn.addEventListener('touchstart', triggerFire, { passive: false });
+    fireBtn.addEventListener('mousedown', triggerFire);
+
     window.addEventListener('keydown', (e) => {
-        keys[e.key.toLowerCase()] = true;
-        if (e.key === ' ' || e.key === 'Spacebar') {
-            shootBullet(player, 'player');
-        }
+        if (e.key === 'ArrowUp' || e.key === 'w') keys.up = true;
+        if (e.key === 'ArrowDown' || e.key === 's') keys.down = true;
+        if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+        if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+        if (e.key === ' ') shootBullet(player);
     });
 
     window.addEventListener('keyup', (e) => {
-        keys[e.key.toLowerCase()] = false;
+        if (e.key === 'ArrowUp' || e.key === 'w') keys.up = false;
+        if (e.key === 'ArrowDown' || e.key === 's') keys.down = false;
+        if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+        if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
     });
 
+    function checkObstacleCollision(x, y, radius = 22) {
+        for (let obs of obstacles) {
+            if (x + radius > obs.x && x - radius < obs.x + obs.w &&
+                y + radius > obs.y && y - radius < obs.y + obs.h) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // -------------------------------------------------------------
-    // 4. GAME LOGIC & HELPER FUNCTIONS
+    // 4. GAME LOGIC, MATCH TIMER & SMART FREE-FOR-ALL AI
     // -------------------------------------------------------------
-    function shootBullet(shooter, owner) {
-        const bulletSpeed = 7;
+    function shootBullet(shooter) {
+        if (shooter.hp <= 0) return;
+        const now = Date.now();
+        if (now - shooter.lastShootTime < 400) return;
+        shooter.lastShootTime = now;
+
+        const bulletSpeed = 10;
         bullets.push({
-            x: shooter.x + Math.cos(shooter.angle) * 25,
-            y: shooter.y + Math.sin(shooter.angle) * 25,
+            x: shooter.x + Math.cos(shooter.angle) * 32,
+            y: shooter.y + Math.sin(shooter.angle) * 32,
             vx: Math.cos(shooter.angle) * bulletSpeed,
             vy: Math.sin(shooter.angle) * bulletSpeed,
-            owner: owner
+            owner: shooter
         });
     }
 
-    function checkRectCollision(rect1, rect2) {
-        return (
-            rect1.x - rect1.width / 2 < rect2.x + rect2.width &&
-            rect1.x + rect1.width / 2 > rect2.x &&
-            rect1.y - rect1.height / 2 < rect2.y + rect2.height &&
-            rect1.y + rect1.height / 2 > rect2.y
-        );
-    }
+    setInterval(() => {
+        if (matchTime > 0) {
+            matchTime--;
+            const mins = String(Math.floor(matchTime / 60)).padStart(2, '0');
+            const secs = String(matchTime % 60).padStart(2, '0');
+            document.getElementById('timer-display').innerText = `${mins}:${secs}`;
+        }
+
+        if (zoneStateTimer > 0) {
+            zoneStateTimer--;
+            document.getElementById('zone-timer').innerText = `Zone Shrinking in ${zoneStateTimer}s`;
+        } else {
+            zone.targetRadius = Math.max(150, zone.targetRadius - 180);
+            zoneStateTimer = 35;
+        }
+    }, 1000);
 
     function update() {
-        // Player Movement Controls (WASD or Arrow Keys)
-        if (keys['a'] || keys['arrowleft']) {
-            player.angle -= player.rotationSpeed;
-        }
-        if (keys['d'] || keys['arrowright']) {
-            player.angle += player.rotationSpeed;
+        // Smooth zone shrinking
+        if (zone.currentRadius > zone.targetRadius) {
+            zone.currentRadius -= 0.4;
         }
 
-        let moveX = 0;
-        let moveY = 0;
+        // Player Movement & Solid Obstacle Collisions
+        if (player.hp > 0) {
+            if (keys.left) player.angle -= player.rotationSpeed;
+            if (keys.right) player.angle += player.rotationSpeed;
 
-        if (keys['w'] || keys['arrowup']) {
-            moveX = Math.cos(player.angle) * player.speed;
-            moveY = Math.sin(player.angle) * player.speed;
+            let nextX = player.x;
+            let nextY = player.y;
+
+            if (keys.up) {
+                nextX += Math.cos(player.angle) * player.speed;
+                nextY += Math.sin(player.angle) * player.speed;
+            }
+            if (keys.down) {
+                nextX -= Math.cos(player.angle) * (player.speed * 0.5);
+                nextY -= Math.sin(player.angle) * (player.speed * 0.5);
+            }
+
+            if (!checkObstacleCollision(nextX, player.y)) player.x = nextX;
+            if (!checkObstacleCollision(player.x, nextY)) player.y = nextY;
+
+            player.x = Math.max(30, Math.min(MAP_SIZE - 30, player.x));
+            player.y = Math.max(30, Math.min(MAP_SIZE - 30, player.y));
+
+            // Zone Damage
+            if (Math.hypot(player.x - zone.x, player.y - zone.y) > zone.currentRadius) {
+                player.hp = Math.max(0, player.hp - 0.1);
+            }
         }
-        if (keys['s'] || keys['arrowdown']) {
-            moveX = -Math.cos(player.angle) * (player.speed * 0.6);
-            moveY = -Math.sin(player.angle) * (player.speed * 0.6);
-        }
 
-        // Apply movement with obstacle collision check
-        player.x += moveX;
-        player.y += moveY;
+        document.getElementById('health-bar').style.width = `${player.hp}%`;
 
-        obstacles.forEach(obs => {
-            if (checkRectCollision(player, obs)) {
-                player.x -= moveX;
-                player.y -= moveY;
+        // Free-For-All AI Targeting Logic
+        const allLivingTanks = [player, ...enemies].filter(t => t.hp > 0);
+
+        enemies.forEach(bot => {
+            if (bot.hp <= 0) return;
+
+            // Find nearest opponent (Bot or Player)
+            let nearestTarget = null;
+            let minDistance = Infinity;
+
+            allLivingTanks.forEach(target => {
+                if (target !== bot) {
+                    const d = Math.hypot(target.x - bot.x, target.y - bot.y);
+                    if (d < minDistance) {
+                        minDistance = d;
+                        nearestTarget = target;
+                    }
+                }
+            });
+
+            let targetX = zone.x;
+            let targetY = zone.y;
+
+            const botDistFromZoneCenter = Math.hypot(bot.x - zone.x, bot.y - zone.y);
+            // Prioritize moving inside zone if caught in storm, otherwise hunt target
+            if (botDistFromZoneCenter > zone.currentRadius - 60) {
+                targetX = zone.x;
+                targetY = zone.y;
+            } else if (nearestTarget) {
+                targetX = nearestTarget.x;
+                targetY = nearestTarget.y;
+            }
+
+            const dx = targetX - bot.x;
+            const dy = targetY - bot.y;
+            let targetAngle = Math.atan2(dy, dx);
+
+            // Obstacle Avoidance Steering
+            if (checkObstacleCollision(bot.x + Math.cos(bot.angle) * 45, bot.y + Math.sin(bot.angle) * 45)) {
+                targetAngle += Math.PI / 2;
+            }
+
+            let angleDiff = targetAngle - bot.angle;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+
+            bot.angle += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), bot.rotationSpeed);
+
+            let nextBotX = bot.x + Math.cos(bot.angle) * bot.speed;
+            let nextBotY = bot.y + Math.sin(bot.angle) * bot.speed;
+
+            if (!checkObstacleCollision(nextBotX, bot.y)) bot.x = nextBotX;
+            if (!checkObstacleCollision(bot.x, nextBotY)) bot.y = nextBotY;
+
+            // Fire on line-of-sight
+            if (nearestTarget && Math.abs(angleDiff) < 0.35 && minDistance < 550) {
+                shootBullet(bot);
+            }
+
+            if (botDistFromZoneCenter > zone.currentRadius) {
+                bot.hp = Math.max(0, bot.hp - 0.15);
             }
         });
-
-        // Basic AI Logic
-        if (aiTank.hp > 0) {
-            const dx = player.x - aiTank.x;
-            const dy = player.y - aiTank.y;
-            aiTank.angle = Math.atan2(dy, dx);
-
-            // AI Shoot Interval (Every 1.5 seconds)
-            const now = Date.now();
-            if (now - aiTank.lastShootTime > 1500) {
-                shootBullet(aiTank, 'ai');
-                aiTank.lastShootTime = now;
-            }
-        }
 
         // Bullet Updates & Collisions
         for (let i = bullets.length - 1; i >= 0; i--) {
@@ -193,125 +489,168 @@
             b.x += b.vx;
             b.y += b.vy;
 
-            // Screen boundary collision
-            if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+            // Obstacle or Map Boundary Hit
+            if (checkObstacleCollision(b.x, b.y, 4) || b.x < 0 || b.x > MAP_SIZE || b.y < 0 || b.y > MAP_SIZE) {
                 bullets.splice(i, 1);
                 continue;
             }
 
-            // Obstacle collision (Bullets hit stone/debris)
-            let hitObstacle = false;
-            obstacles.forEach(obs => {
-                if (b.x > obs.x && b.x < obs.x + obs.width && b.y > obs.y && b.y < obs.y + obs.height) {
-                    hitObstacle = true;
+            // Hit Player
+            if (b.owner !== player && player.hp > 0 && Math.hypot(b.x - player.x, b.y - player.y) < 22) {
+                player.hp = Math.max(0, player.hp - 15);
+                if (player.hp === 0) b.owner.kills++;
+                bullets.splice(i, 1);
+                continue;
+            }
+
+            // Hit AI Bots
+            enemies.forEach(bot => {
+                if (b.owner !== bot && bot.hp > 0 && Math.hypot(b.x - bot.x, b.y - bot.y) < 22) {
+                    bot.hp = Math.max(0, bot.hp - 35);
+                    if (bot.hp === 0) b.owner.kills++;
+                    bullets.splice(i, 1);
                 }
             });
-
-            if (hitObstacle) {
-                bullets.splice(i, 1);
-                continue;
-            }
-
-            // Player hit check
-            if (b.owner === 'ai' && checkRectCollision({ x: b.x, y: b.y, width: 6, height: 6 }, player)) {
-                player.hp = Math.max(0, player.hp - 10);
-                document.getElementById('player-hp').innerText = player.hp;
-                bullets.splice(i, 1);
-                continue;
-            }
-
-            // AI hit check
-            if (b.owner === 'player' && aiTank.hp > 0 && checkRectCollision({ x: b.x, y: b.y, width: 6, height: 6 }, aiTank)) {
-                aiTank.hp = Math.max(0, aiTank.hp - 20);
-                document.getElementById('enemy-hp').innerText = aiTank.hp;
-                bullets.splice(i, 1);
-                continue;
-            }
         }
+
+        updateLeaderboard();
+    }
+
+    function updateLeaderboard() {
+        const all = [player, ...enemies];
+        all.sort((a, b) => b.kills - a.kills || b.hp - a.hp);
+
+        const list = document.getElementById('leaderboard-list');
+        list.innerHTML = '';
+        all.forEach((ent, idx) => {
+            const row = document.createElement('div');
+            row.className = `leaderboard-row ${ent === player ? 'player-row' : ''}`;
+            row.innerHTML = `<span>#${idx + 1} ${ent.id} ${ent.hp <= 0 ? '☠️' : ''}</span> <span>${ent.kills} K</span>`;
+            list.appendChild(row);
+        });
     }
 
     // -------------------------------------------------------------
-    // 5. RENDERING FUNCTIONS
+    // 5. TANK RENDERER (IMAGE WITH VECTOR FALLBACK)
     // -------------------------------------------------------------
-    function drawUnifiedTank(x, y, angle, imgObject, fallbackColor) {
+    function drawTank(x, y, angle, imgKey, fallbackColor) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
 
-        // Draw image if loaded, fallback to colored box if loading fails
-        if (imgObject && imgObject.complete && imgObject.naturalWidth !== 0) {
-            ctx.drawImage(imgObject, -20, -20, 40, 40);
+        const img = images[imgKey];
+        if (img && img.complete && img.naturalWidth !== 0) {
+            ctx.drawImage(img, -28, -28, 56, 56);
         } else {
+            // Detailed vector tank mesh fallback
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(-24, -22, 48, 10);
+            ctx.fillRect(-24, 12, 48, 10);
+
+            ctx.fillStyle = '#1b1e22';
+            ctx.fillRect(-22, -20, 44, 8);
+            ctx.fillRect(-22, 12, 44, 8);
+
             ctx.fillStyle = fallbackColor;
-            ctx.fillRect(-20, -20, 40, 40);
-            ctx.fillStyle = '#111';
-            ctx.fillRect(0, -4, 25, 8); // Tank barrel
+            ctx.beginPath();
+            ctx.moveTo(-18, -12);
+            ctx.lineTo(16, -12);
+            ctx.lineTo(22, -6);
+            ctx.lineTo(22, 6);
+            ctx.lineTo(16, 12);
+            ctx.lineTo(-18, 12);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#0a0d10';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#121417';
+            ctx.fillRect(0, -3.5, 32, 7);
+            ctx.strokeRect(0, -3.5, 32, 7);
+
+            ctx.fillStyle = fallbackColor;
+            ctx.beginPath();
+            ctx.arc(-2, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
         }
 
         ctx.restore();
     }
 
+    // -------------------------------------------------------------
+    // 6. CAMERA & RENDER LOOP
+    // -------------------------------------------------------------
     function render() {
-        // Clear screen
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw background grid lines
-        ctx.strokeStyle = '#333333';
+        ctx.save();
+        // Camera Follows Player Center
+        ctx.translate(canvas.width / 2 - player.x, canvas.height / 2 - player.y);
+
+        // Arena Grid Lines
+        ctx.strokeStyle = '#212730';
         ctx.lineWidth = 1;
-        for (let x = 0; x < canvas.width; x += 40) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvas.height);
-            ctx.stroke();
+        for (let x = 0; x <= MAP_SIZE; x += 80) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_SIZE); ctx.stroke();
         }
-        for (let y = 0; y < canvas.height; y += 40) {
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
-            ctx.stroke();
+     for (let y = 0; y <= MAP_SIZE; y += 80) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_SIZE, y); ctx.stroke();
         }
 
-        // Draw solid stone/debris obstacles
+        // Draw Solid Cover Blocks
+        ctx.fillStyle = '#2c3542';
+        ctx.strokeStyle = '#151a21';
+        ctx.lineWidth = 3;
         obstacles.forEach(obs => {
-            ctx.fillStyle = '#666666';
-            ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-            ctx.strokeStyle = '#888888';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
         });
 
-        // Draw Player Tank
+        // Outer Bounds
+        ctx.strokeStyle = '#e74c3c';
+        ctx.lineWidth = 5;
+        ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+        // Shrinking Safe Zone
+        ctx.strokeStyle = '#3498db';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(zone.x, zone.y, zone.currentRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Render Player
         if (player.hp > 0) {
-            drawUnifiedTank(player.x, player.y, player.angle, tankImages.player, '#4CA64C');
+            drawTank(player.x, player.y, player.angle, player.imgKey, player.fallbackColor);
         }
 
-        // Draw AI Tank
-        if (aiTank.hp > 0) {
-            drawUnifiedTank(aiTank.x, aiTank.y, aiTank.angle, tankImages.enemy1, '#D9534F');
-        }
+        // Render AI Bots
+        enemies.forEach(bot => {
+            if (bot.hp > 0) {
+                drawTank(bot.x, bot.y, bot.angle, bot.imgKey, bot.fallbackColor);
+            }
+        });
 
-        // Draw Bullets
-        ctx.fillStyle = '#FFD700';
+        // Render Bullets
         bullets.forEach(b => {
+            ctx.fillStyle = '#f1c40f';
             ctx.beginPath();
             ctx.arc(b.x, b.y, 4, 0, Math.PI * 2);
             ctx.fill();
         });
+
+        ctx.restore();
     }
 
-    // -------------------------------------------------------------
-    // 6. MAIN GAME LOOP
-    // -------------------------------------------------------------
     function gameLoop() {
         update();
         render();
         requestAnimationFrame(gameLoop);
     }
 
-    // Start the game
     gameLoop();
 </script>
 
 </body>
 </html>
-
